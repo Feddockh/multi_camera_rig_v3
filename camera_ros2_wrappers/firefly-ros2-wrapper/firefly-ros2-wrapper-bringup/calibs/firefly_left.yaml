@@ -1,0 +1,26 @@
+image_width: 1440
+image_height: 1080
+camera_name: firefly_left
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [1749.35962,    0.     ,  713.57019,
+            0.     , 1750.37576,  505.21442,
+            0.     ,    0.     ,    1.     ]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.272549, 0.121169, 0.001261, 0.000242, 0.000000]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [ 0.99932901,  0.01597826, -0.03295796,
+         -0.0158705 ,  0.99986783,  0.00352846,
+          0.03300998, -0.00300304,  0.99945051]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [1733.85896,    0.     ,  788.60532,    0.     ,
+            0.     , 1733.85896,  499.08208,    0.     ,
+            0.     ,    0.     ,    1.     ,    0.     ]

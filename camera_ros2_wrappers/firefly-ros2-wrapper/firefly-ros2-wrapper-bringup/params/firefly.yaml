@@ -1,0 +1,358 @@
+# Configuration file for Firefly camera
+# Parameters pulled from the Spinnaker SpinView software
+
+parameters:
+
+  ### Acquisition Control ###
+  - name: acquisition_mode
+    # Description: Sets the acquisition mode of the device. Continuous: 
+      # acquires images continuously. Multi Frame: acquires a specified 
+      # number of images before stopping acquisition. Single Frame: acquires 1 
+      # image before stopping acquisition.
+    type: enum
+    # Valid values: Continuous, SingleFrame, MultiFrame
+    node: AcquisitionControl/AcquisitionMode
+
+  - name: acquisition_on_boot_enable
+    # Description: Start image acqusition when the camera boots up. This 
+      # will allow acquisition to run without the need for a host. This 
+      # setting will have to be saved to a userset that is loaded on boot 
+      # to take effect.
+    type: bool
+    # Valid values: True, False
+    node: AcquisitionControl/AcquisitionOnBoot
+
+  - name: acquisition_frame_count
+    # Description: Number of images to acquire during a multi frame 
+       # acquisition.
+    type: int
+    # Valid values: x in [2, 65535]
+    node: AcquisitionControl/AcquisitionFrameCount
+
+  - name: exposure_mode
+    # Description: Sets the exposure mode of the device.
+    type: enum
+    # Valid values: Timed, TriggerWidth
+    node: AcquisitionControl/ExposureMode
+
+  - name: exposure_auto
+    # Description: Sets the automatic exposure mode of the device.
+    type: enum
+    # Valid values: Off, Once, Continuous
+    node: AcquisitionControl/ExposureAuto
+
+  - name: exposure_time
+    # Description: Sets the exposure time of the device in microseconds.
+    type: float
+    # Vaid values: x in [29.000000, 30000014.000000]
+    node: AcquisitionControl/ExposureTime
+
+  - name: acquisition_frame_rate_enable
+    # Description: If enabled, AcquisitionFrameRate can be used to manually
+      # control the frame rate.
+    type: bool
+    # Valid values: True, False
+    node: AcquisitionControl/AcquisitionFrameRateEnable
+
+  - name: trigger_selector
+    # Description: Sets the trigger source of the device.
+    type: enum
+    # Valid values: AcquisitionStart, FrameStart
+    node: AcquisitionControl/TriggerSelector
+
+  - name: trigger_mode
+    # Description: Controls whether or not trigger is active.
+    type: enum
+    # Valid values: On, Off
+    node: AcquisitionControl/TriggerMode
+
+  - name: trigger_source
+    # Description: Specifies the internal signal or physical input line to use 
+      # as the trigger source.
+    type: enum
+    # Valid values: Line<0,1,2,3>, Software
+    node: AcquisitionControl/TriggerSource
+
+  - name: trigger_activation
+    # Description: Specifies the activation of the selected trigger.
+      # Is only valid when trigger source is not software.
+    type: enum
+    # Valid values: RisingEdge, FallingEdge, LevelHigh, LevelLow
+    node: AcquisitionControl/TriggerActivation
+
+  - name: sensor_shutter_mode
+    # Description: Sets the shutter mode of the device.
+    type: enum
+    # Valid values: Global
+    node: AcquisitionControl/SensorShutterMode
+
+  ### Analog Control ###
+  - name: gain_selector
+    # Description: Selects which gain to control. The All selection is a total
+     # amplification across all channels (or taps).
+    type: enum
+    # Valid values: All
+    node: AnalogControl/GainSelector
+
+  - name: gain
+    # Description: Controls the amplification of the video signal in dB.
+    type: float
+    # Valid values: x in [0.000000, 48.000000]
+    node: AnalogControl/Gain
+
+  - name: gain_auto
+    # Description: Sets the automatic gain mode. Set to Off for manual control.
+      # Set to Once for a single automatic adjustment then return to Off. Set
+      # to Continuous for constant adjustment. In automatic modes, the camera
+      # adjusts the gain to maximize the dynamic range.
+    type: enum
+    # Valid values: Off, Once, Continuous
+    node: AnalogControl/GainAuto
+
+  - name: black_level_selector
+    # Description: Selects which black level to control.  Only All can be set
+      # by the user. Analog and Digital are read-only.
+    type: enum
+    # Valid values: All, Analog, Digital
+    node: AnalogControl/BlackLevelSelector
+
+  - name: black_level
+    # Description: Controls the offset of the video signal in percent.
+    type: float
+    # Valid values: x in [-5.000001, 10.000002]
+    node: AnalogControl/BlackLevel
+
+  - name: black_level_clamping_enable
+    # Description: Enable the black level auto clamping feature which performs
+      # dark current compensation. This feature is not supported by rolling
+      # shutter sensors.
+    type: bool
+    # Valid values: True, False
+    node: AnalogControl/BlackLevelClampingEnable
+
+  # - name: balance_ratio_selector
+  #   # Description: Selects a balance ratio to configure once a balance ratio 
+  #     # control has been selected.
+  #   type: enum
+  #   # Valid values: Red, Blue
+  #   node: AnalogControl/BalanceRatioSelector
+
+  # - name: balance_ratio
+  #   # Description: Controls the balance ratio of the selected color relative 
+  #     # to green. Used for white balancing.
+  #   type: float
+  #   # Valid values: x in [0.250000, 4.000000]
+  #   node: AnalogControl/BalanceRatio
+
+  - name: balance_ratio_selector_red
+    type: enum
+    # Valid values: "Red"
+    node: AnalogControl/BalanceRatioSelector
+
+  - name: balance_ratio_red
+    type: float
+    # Valid values: x in [0.250000, 4.000000]
+    node: AnalogControl/BalanceRatio
+
+  - name: balance_ratio_selector_blue
+    type: enum
+    # Valid values: "Blue"
+    node: AnalogControl/BalanceRatioSelector
+
+  - name: balance_ratio_blue
+    type: float
+    # Valid values: x in [0.250000, 4.000000]
+    node: AnalogControl/BalanceRatio
+
+  - name: balance_white_auto
+    # Description: Sets the automatic white balance mode. Set to Off for manual
+      # control. Set to Once for a single automatic adjustment then return to
+      # Off. Set to Continuous for constant adjustment. In automatic modes, the
+      # camera adjusts the white balance to maximize the dynamic range.
+    type: enum
+    # Valid values: Off, Once, Continuous
+    node: AnalogControl/BalanceWhiteAuto
+    
+  - name: gamma
+    # Description: Controls the gamma correction of pixel intensity.
+    type: float
+    # Valid values: x in [0.250000, 2.000000]
+    node: AnalogControl/Gamma
+
+  - name: gamma_enable
+    # Description: Enable the gamma correction feature.
+    type: bool
+    # Valid values: True, False
+    node: AnalogControl/GammaEnable
+
+  - name: sharpening_enable
+    # Description: Enable the sharpening feature.
+    type: bool
+    # Valid values: True, False
+    node: AnalogControl/SharpeningEnable
+
+  - name: sharpening
+    # Description: Controls the sharpening of the image.
+      # Sharpening enable must be set to True for this feature to work.
+    type: float
+    # Valid values: x in [3.224994, 100.000000]
+    node: AnalogControl/Sharpening
+
+  - name: denoise_enable
+    # Description: Enable the denoise feature.
+    type: bool
+    # Valid values: True, False
+    node: AnalogControl/DenoiseEnable
+
+  - name: denoise
+    # Description: Controls the denoise of the image.
+      # Denoise enable must be set to True for this feature to work.
+    type: int
+    # Valid values: x in [0, 100]
+    node: AnalogControl/Denoise
+
+  ### Image Format Control ###
+  - name: width
+    # Description: Width of the image in pixels.
+    type: int
+    # Valid values: 32, 36, 38, ..., 1440
+    node: ImageFormatControl/Width
+
+  - name: height
+    # Description: Height of the image in pixels.
+    type: int
+    # Valid values: 32, 36, 38, ..., 1080
+    node: ImageFormatControl/Height
+
+  - name: offset_x
+    # Description: Horizontal offset from the origin to the ROI (in pixels).
+    type: int
+    # Valid values: 0
+    node: ImageFormatControl/OffsetX
+
+  - name: offset_y
+    # Description: Vertical offset from the origin to the ROI (in pixels).
+    type: int
+    # Valid values: 0
+    node: ImageFormatControl/OffsetY
+    
+  - name: pixel_format
+    # Description: Sets the pixel format of the image.
+    type: enum
+    # Valid values: Mono8, Mono16, RGB8Packed, BayerRG8, BayerRG16, BGR8
+    node: ImageFormatControl/PixelFormat
+
+  - name: binning_selector
+    # Description: Selects which binning engine is controlled by the 
+      # BinningHorizontal and BinningVertical features.
+    type: enum
+    # Valid values: All, Sensor
+    node: ImageFormatControl/BinningSelector
+
+  - name: reverse_x
+    # Description: Horizontally flips the image sent by the device. The region
+      # of interest is applied after flipping. For color cameras the bayer
+      # pixel format is affected. For example, BayerRG16 changes to BayerGR16.
+    type: bool
+    # Valid values: True, False
+    node: ImageFormatControl/ReverseX
+
+  - name: reverse_y
+    # Description: Vertically flips the image sent by the device. The region of
+      # interest is applied after flipping. For color cameras the bayer pixel
+      # format is affected. For example, BayerRG16 changes to BayerGB16.
+    type: bool
+    # Valid values: True, False
+    node: ImageFormatControl/ReverseY
+
+  ### Color Transformation Control ###
+  - name: saturation_enable
+    # Description: Enable the saturation feature.
+    type: bool
+    # Valid values: True, False
+    node: ColorTransformationControl/SaturationEnable
+
+  - name: saturation
+    # Description: Controls the saturation of the image.
+      # Saturation enable must be set to True for this feature to work.
+    type: float
+    # Valid values: x in [0.000000, 1.999023]
+    node: ColorTransformationControl/Saturation
+
+  ### Auto Algorithm Control ###
+  - name: exposure_time_lower_limit
+    # Description: Sets the lower limit for the exposure time in microseconds.
+    type: float
+    # Valid values: x in [29.000000, 30000014.000000]
+    node: AutoAlgorithmControl/AutoExposureExposureTimeLowerLimit
+
+  - name: exposure_time_upper_limit
+    # Description: Sets the upper limit for the exposure time in microseconds.
+    type: float
+    # Valid values: x in [29.000000, 30000014.000000]
+    node: AutoAlgorithmControl/AutoExposureExposureTimeUpperLimit
+
+  ### Chunk Data Control ###
+  - name: chunk_mode_active
+    # Description: Enable the chunk data feature. When enabled, the camera
+      # appends metadata to each image. This metadata includes information
+      # about the image such as frame ID, exposure time, and gain.
+    type: bool
+    # Valid values: True, False
+    node: ChunkDataControl/ChunkModeActive
+
+  - name: chunk_selector_frame_id
+    type: enum
+    # valid values: "FrameID"
+    node: ChunkDataControl/ChunkSelector
+
+  - name: chunk_enable_frame_id
+    type: bool
+    node: ChunkDataControl/ChunkEnable
+
+  - name: chunk_selector_exposure_time
+    type: enum
+    # valid values: "ExposureTime"
+    node: ChunkDataControl/ChunkSelector
+
+  - name: chunk_enable_exposure_time
+    type: bool
+    node: ChunkDataControl/ChunkEnable
+
+  - name: chunk_selector_gain
+    type: enum
+    # valid values: "Gain"
+    node: ChunkDataControl/ChunkSelector
+
+  - name: chunk_enable_gain
+    type: bool
+    node: ChunkDataControl/ChunkEnable
+
+  - name: chunk_selector_timestamp
+    type: enum
+    # valid values: "Timestamp"
+    node: ChunkDataControl/ChunkSelector
+
+  - name: chunk_enable_timestamp
+    type: bool
+    node: ChunkDataControl/ChunkEnable
+
+  ### Digital I/O Control ###
+  - name: line_selector
+    # Description: Selects which digital I/O line to control.
+    type: enum
+    # Valid values: Line0, Line1, Line2, Line3
+    node: DigitalIOControl/LineSelector
+
+  - name: line_mode
+    # Description: Sets the mode of the selected digital I/O line.
+    type: enum
+    # Valid values: Input, Output
+    node: DigitalIOControl/LineMode
+
+  ### Stream Buffer Handling Control ###
+  - name: "stream_buffer_handling_mode"
+    # Description: Sets the stream buffer handling mode.
+    type: enum
+    # valid values: "NewestFirst", "OldestFirst", "NewestOnly", "OldestFirstOverwrite"
+    node: BufferHandlingControl/StreamBufferHandlingMode

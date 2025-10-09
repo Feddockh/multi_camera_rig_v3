@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot name="multi_camera_rig" xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <!-- Include macro files -->
+    <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro" />
+
+    <xacro:multi_camera_rig/>
+
+</robot>

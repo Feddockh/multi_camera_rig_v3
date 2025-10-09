@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="multi_camera_rig">
+    <!-- No planning groups, but disable internal collisions -->
+    <disable_collisions link1="multi_camera_rig_mount" link2="multi_camera_rig_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_mount" link2="firefly_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_mount" link2="ximea_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_mount" link2="zed2i_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_link" link2="firefly_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_link" link2="ximea_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_link" link2="zed2i_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="multi_camera_rig_link" link2="zed2i_camera_center" reason="Adjacent"/>
+    <disable_collisions link1="firefly_camera_link" link2="ximea_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="firefly_camera_link" link2="zed2i_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="ximea_camera_link" link2="zed2i_camera_link" reason="Adjacent"/>
+    <disable_collisions link1="ximea_camera_link" link2="zed2i_camera_center" reason="Adjacent"/>
+
+  </xacro:macro>
+
+</robot>

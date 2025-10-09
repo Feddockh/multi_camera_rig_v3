@@ -1,0 +1,163 @@
+# firefly.yaml
+
+cameras:
+  - firefly_left
+  - firefly_right
+
+exposure_controllers:
+  - firefly_left.exposure_controller
+  - firefly_right.exposure_controller
+
+ffmpeg_image_transport:
+  encoding: hevc_nvenc
+
+firefly_left:
+  exposure_controller_name: firefly_left.exposure_controller
+  serial_number: '21039765'
+  camerainfo_url: '__camerainfo_url__' # Updated later
+  frame_id: firefly_left
+  debug: false
+  quiet: true
+  compute_brightness: false # Doesn't work with RGB8Packed
+  adjust_timestamp: true
+  acquisition_timeout: 2000000000.0 # Bascially infinite (Just above epoch due to bug in ros wrapper)
+  buffer_queue_size: 4
+
+  # acquisition_mode: 'SingleFrame'
+  acquisition_mode: 'Continuous'
+  acquisition_frame_rate_enable: true
+
+  exposure_mode: 'Timed'
+  exposure_auto: 'Off'
+  exposure_time: 100.0
+
+  trigger_mode: 'On'
+  trigger_selector: 'FrameStart'
+  trigger_source: 'Line3'
+  trigger_activation: 'FallingEdge'
+
+  line_selector: 'Line3'
+  line_mode: 'Input'
+
+  gain_auto: 'Off'
+  gain: 0.0
+
+  black_level_selector: 'All'
+  black_level: 1.7
+
+  gamma_enable: true
+  gamma: 1.0
+
+  # sharpening_enable: false
+  # sharpening: 0.0
+
+  # saturation_enable: false
+  # saturation: 1.0
+
+  balance_ratio_selector_red: 'Red'
+  balance_ratio_red: 1.43355
+  balance_ratio_selector_blue: 'Blue'
+  balance_ratio_blue: 3.06255
+
+  width: 1440
+  height: 1080
+
+  pixel_format: 'RGB8Packed' # Color image
+
+  chunk_mode_active: true
+  chunk_selector_frame_id: 'FrameID'
+  chunk_enable_frame_id: true
+  chunk_selector_exposure_time: 'ExposureTime'
+  chunk_enable_exposure_time: true
+  chunk_selector_gain: 'Gain'
+  chunk_enable_gain: true
+  chunk_selector_timestamp: 'Timestamp'
+  chunk_enable_timestamp: true
+
+  parameter_file: '__parameter_file__'  # Updated later
+
+firefly_left.exposure_controller:
+  # brightness_target: 120 # Doesn't work with RGB8Packed
+  brightness_tolerance: 255 # Prevents exposure update (only implemented for bayer images)
+  max_exposure_time: 1000000
+  min_exposure_time: 29
+  max_gain: 0.0
+  # max_frames_skip: 0 # Used in brightness updates
+  # gain_priority: false # Used in brightness updates
+  type: 'master'
+
+firefly_right:
+  exposure_controller_name: firefly_right.exposure_controller
+  serial_number: '21081518'
+  camerainfo_url: '__camerainfo_url__' # Updated later
+  frame_id: firefly_right
+  debug: false
+  quiet: true
+  compute_brightness: false # Doesn't work with RGB8Packed
+  adjust_timestamp: true
+  acquisition_timeout: 2000000000.0 # Bascially infinite (Just above epoch due to bug in ros wrapper)
+  buffer_queue_size: 4
+
+  # acquisition_mode: 'SingleFrame'
+  acquisition_mode: 'Continuous'
+  acquisition_frame_rate_enable: true
+
+  exposure_mode: 'Timed'
+  exposure_auto: 'Off'
+  exposure_time: 100.0
+
+  trigger_mode: 'On'
+  trigger_selector: 'FrameStart'
+  trigger_source: 'Line3'
+  trigger_activation: 'FallingEdge'
+
+  line_selector: 'Line3'
+  line_mode: 'Input'
+
+  gain_auto: 'Off'
+  gain: 0.0
+
+  black_level_selector: 'All'
+  black_level: 1.7
+
+  gamma_enable: true
+  gamma: 1.0
+
+  # sharpening_enable: false
+  # sharpening: 0.0
+
+  # saturation_enable: false
+  # saturation: 1.0
+
+  balance_ratio_selector_red: 'Red'
+  balance_ratio_red: 1.43355
+  balance_ratio_selector_blue: 'Blue'
+  balance_ratio_blue: 3.06255
+
+  width: 1440
+  height: 1080
+
+  pixel_format: 'RGB8Packed' # Color image
+
+  chunk_mode_active: true
+  chunk_selector_frame_id: 'FrameID'
+  chunk_enable_frame_id: true
+  chunk_selector_exposure_time: 'ExposureTime'
+  chunk_enable_exposure_time: true
+  chunk_selector_gain: 'Gain'
+  chunk_enable_gain: true
+  chunk_selector_timestamp: 'Timestamp'
+  chunk_enable_timestamp: true
+
+  parameter_file: '__parameter_file__'  # Updated later
+
+firefly_right.exposure_controller:
+  # brightness_target: 120 # Doesn't work with RGB8Packed
+  brightness_tolerance: 255 # Prevents exposure update (only implemented for bayer images)
+  max_exposure_time: 1000000
+  min_exposure_time: 29
+  max_gain: 0.0
+  # max_frames_skip: 0 # Used in brightness updates
+  # gain_priority: false # Used in brightness updates
+  type: 'follower'
+  master: 'firefly_left.exposure_controller'

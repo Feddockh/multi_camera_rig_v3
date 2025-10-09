@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot name="firefly_camera" xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <!-- Include macro files -->
+    <xacro:include filename="$(find firefly-ros2-wrapper-description)/urdf/firefly_stereo_macro.urdf.xacro" />
+
+    <xacro:firefly_camera/>
+
+</robot>
