@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <!-- Gazebo (Ignition) sensor plugins for Firefly stereo camera -->
+    <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly">
+
+        <!-- Left Camera Sensor -->
+        <gazebo reference="firefly_left_optical_frame">
+            <sensor name="firefly_left_camera" type="camera">
+                <update_rate>30</update_rate>
+                <always_on>1</always_on>
+                <visualize>true</visualize>
+                <topic>${namespace}/left</topic>
+                <!-- <ignition_frame_id>firefly_left_optical_frame</ignition_frame_id> -->
+                <camera name="firefly_left">
+                    <horizontal_fov>1.3962634</horizontal_fov>  <!-- 80 degrees -->
+                    <image>
+                        <width>1440</width>
+                        <height>1080</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.01</near>
+                        <far>300</far>
+                    </clip>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.007</stddev>
+                    </noise>
+                </camera>
+            </sensor>
+        </gazebo>
+
+        <!-- Right Camera Sensor -->
+        <gazebo reference="firefly_right_optical_frame">
+            <sensor name="firefly_right_camera" type="camera">
+                <update_rate>30</update_rate>
+                <always_on>1</always_on>
+                <visualize>true</visualize>
+                <topic>${namespace}/right</topic>
+                <camera name="firefly_right">
+                    <horizontal_fov>1.3962634</horizontal_fov>  <!-- 80 degrees -->
+                    <image>
+                        <width>1440</width>
+                        <height>1080</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.01</near>
+                        <far>300</far>
+                    </clip>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.007</stddev>
+                    </noise>
+                </camera>
+            </sensor>
+        </gazebo>
+
+    </xacro:macro>
+</robot>

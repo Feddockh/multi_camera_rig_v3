@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
+    <!-- Include Gazebo sensor plugins -->
+    <xacro:include filename="$(find firefly-ros2-wrapper-description)/urdf/firefly_stereo_gazebo.urdf.xacro"/>
+
     <!-- Macro Definition -->
-    <xacro:macro name="firefly_camera">
+    <xacro:macro name="firefly_camera" params="use_gazebo:=true namespace:=firefly">
 
         <!-- Link: camera body -->
         <link name="firefly_camera_link">
@@ -42,6 +45,11 @@
             <child link="firefly_left_optical_frame"/>
             <origin xyz="-0.02999871 0.07322070 0.00006055" rpy="${-pi/2} 0 0"/>
         </joint>
+
+        <!-- Add Gazebo sensor plugins if in simulation -->
+        <xacro:if value="${use_gazebo}">
+            <xacro:firefly_camera_gazebo namespace="${namespace}"/>
+        </xacro:if>
 
     </xacro:macro>
 </robot>

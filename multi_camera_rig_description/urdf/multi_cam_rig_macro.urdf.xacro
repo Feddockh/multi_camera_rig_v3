@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://wiki.ros.org/xacro">
 
     <!-- Macro Definition -->
-    <xacro:macro name="multi_camera_rig">
+    <xacro:macro name="multi_camera_rig" params="use_gazebo:=true">
 
         <!-- Mounting frame for robot end effector-->
         <link name="multi_camera_rig_mount"/>
@@ -38,7 +38,7 @@
 
         <!-- Firefly Camera -->
         <xacro:include filename="$(find firefly-ros2-wrapper-description)/urdf/firefly_stereo_macro.urdf.xacro"/>
-        <xacro:firefly_camera/>
+        <xacro:firefly_camera use_gazebo="${use_gazebo}" namespace="firefly"/>
         <joint name="firefly_camera_mount_joint" type="fixed">
             <parent link="multi_camera_rig_link"/>
             <child link="firefly_camera_link"/>
