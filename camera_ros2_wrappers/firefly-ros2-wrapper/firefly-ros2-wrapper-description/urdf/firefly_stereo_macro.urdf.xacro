@@ -12,13 +12,13 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="package://firefly-ros2-wrapper-description/meshes/firefly-stereo.dae" scale="1 1 1"/>
+                    <mesh filename="file://$(find firefly-ros2-wrapper-description)/meshes/firefly-stereo.dae" scale="1 1 1"/>
                 </geometry>
             </visual>
             <collision>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="package://firefly-ros2-wrapper-description/meshes/firefly-stereo-collision.stl" scale="1 1 1"/>
+                    <mesh filename="file://$(find firefly-ros2-wrapper-description)/meshes/firefly-stereo-collision.stl" scale="1 1 1"/>
                 </geometry>
             </collision>
             <inertial>
@@ -36,14 +36,14 @@
         <joint name="firefly_right_optical_joint" type="fixed">
             <parent link="firefly_camera_link"/>
             <child link="firefly_right_optical_frame"/>
-            <origin xyz="0.02999871 0.07322070 0.00006055" rpy="${-pi/2} 0 0"/>
+            <origin xyz="0.02999871 0.07322070 0.00006055" rpy="0 0 ${pi/2}"/>
         </joint>
 
         <link name="firefly_left_optical_frame"/>
         <joint name="firefly_left_optical_joint" type="fixed">
             <parent link="firefly_camera_link"/>
             <child link="firefly_left_optical_frame"/>
-            <origin xyz="-0.02999871 0.07322070 0.00006055" rpy="${-pi/2} 0 0"/>
+            <origin xyz="-0.02999871 0.07322070 0.00006055" rpy="0 0 ${pi/2}"/>
         </joint>
 
         <!-- Add Gazebo sensor plugins if in simulation -->

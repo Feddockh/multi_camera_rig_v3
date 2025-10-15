@@ -9,13 +9,13 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="package://ximea_description/meshes/Ximea_Camera_EO_Lens.dae" scale="1 1 1"/>
+                    <mesh filename="file://$(find ximea-ros2-wrapper-description)/meshes/Ximea_Camera_EO_Lens.dae" scale="1 1 1"/>
                 </geometry>
             </visual>
             <collision>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="package://ximea_description/meshes/Ximea_Camera_EO_Lens_Collision.stl" scale="1 1 1"/>
+                    <mesh filename="file://$(find ximea-ros2-wrapper-description)/meshes/Ximea_Camera_EO_Lens_Collision.stl" scale="1 1 1"/>
                 </geometry>
             </collision>
             <inertial>

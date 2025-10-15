@@ -2,7 +2,7 @@
 <robot name="ximea_camera" xmlns:xacro="http://ros.org/wiki/xacro">
 
     <!-- Include macro files -->
-    <xacro:include filename="$(find ximea_description)/urdf/ximea_macro.urdf.xacro" />
+    <xacro:include filename="$(find ximea-ros2-wrapper-description)/urdf/ximea_macro.urdf.xacro" />
 
     <xacro:ximea_camera/>
 
