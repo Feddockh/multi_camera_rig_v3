@@ -4,3 +4,6 @@
 [submodule "camera_ros2_wrappers/firefly-ros2-wrapper/flir_camera_driver"]
 	path = camera_ros2_wrappers/firefly-ros2-wrapper/flir_camera_driver
 	url = https://github.com/ros-drivers/flir_camera_driver.git
+[submodule "external/FoundationStereo"]
+	path = external/FoundationStereo
+	url = https://github.com/NVlabs/FoundationStereo.git
