@@ -31,19 +31,34 @@
             </inertial>
         </link>
 
-        <!-- Optical frames for cameras -->
-        <link name="firefly_right_optical_frame"/>
-        <joint name="firefly_right_optical_joint" type="fixed">
+        <!-- Right camera and optical frames -->
+        <link name="firefly_right_camera_frame"/>
+        <joint name="firefly_right_camera_joint" type="fixed">
             <parent link="firefly_camera_link"/>
-            <child link="firefly_right_optical_frame"/>
+            <child link="firefly_right_camera_frame"/>
             <origin xyz="0.02999871 0.07322070 0.00006055" rpy="0 0 ${pi/2}"/>
         </joint>
 
-        <link name="firefly_left_optical_frame"/>
-        <joint name="firefly_left_optical_joint" type="fixed">
+        <link name="firefly_right_camera_optical_frame"/>
+        <joint name="firefly_right_camera_optical_joint" type="fixed">
+            <parent link="firefly_right_camera_frame"/>
+            <child link="firefly_right_camera_optical_frame"/>
+            <origin xyz="0 0 0" rpy="-${pi/2} 0 -${pi/2}"/>
+        </joint>
+
+        <!-- Left camera and optical frames -->
+        <link name="firefly_left_camera_frame"/>
+        <joint name="firefly_left_camera_joint" type="fixed">
             <parent link="firefly_camera_link"/>
-            <child link="firefly_left_optical_frame"/>
+            <child link="firefly_left_camera_frame"/>
             <origin xyz="-0.02999871 0.07322070 0.00006055" rpy="0 0 ${pi/2}"/>
+        </joint>
+
+        <link name="firefly_left_camera_optical_frame"/>
+        <joint name="firefly_left_camera_optical_joint" type="fixed">
+            <parent link="firefly_left_camera_frame"/>
+            <child link="firefly_left_camera_optical_frame"/>
+            <origin xyz="0 0 0" rpy="-${pi/2} 0 -${pi/2}"/>
         </joint>
 
         <!-- Add Gazebo sensor plugins if in simulation -->

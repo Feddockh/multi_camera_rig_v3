@@ -13,6 +13,11 @@
   <depend>rclcpp_components</depend>
   <depend>spinnaker_camera_driver</depend>
   <depend>spinnaker_synchronized_camera_driver</depend>
+  <depend>sensor_msgs</depend>
+  <depend>stereo_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>message_filters</depend>
+  <depend>libopencv-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

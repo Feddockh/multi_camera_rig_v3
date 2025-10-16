@@ -4,18 +4,23 @@
     <!-- Gazebo (Ignition) sensor plugins for Firefly stereo camera -->
     <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly">
 
-        <!-- Sensors plugin must be loaded by world sdf for vision -->
+        <!-- Sensors plugin required for Ignition Gazebo camera simulation -->
+        <!-- <gazebo>
+            <plugin name="gz::sim::systems::Sensors" filename="libgz-sim-sensors-system.so">
+                <render_engine>ogre2</render_engine>
+            </plugin>
+        </gazebo> -->
 
         <!-- Left Camera Sensor -->
-        <gazebo reference="firefly_left_optical_frame">
+        <gazebo reference="firefly_left_camera_frame">
             <sensor name="firefly_left_camera" type="camera">
-                <update_rate>2</update_rate>
-                <always_on>1</always_on>
+                <update_rate>20</update_rate>
+                <always_on>true</always_on>
                 <visualize>true</visualize>
-                <topic>/camera</topic>
-                <gz_frame_id>firefly_left_optical_frame</gz_frame_id>
-                <!-- <optical_frame_id>firefly_left_optical_frame</optical_frame_id> -->
-                <!-- <camera_info_topic>/firefly_left/camera_info</camera_info_topic> -->
+                <topic>/firefly_left/image_raw</topic>
+                <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
+                <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
+                <pose>0 0 0 0 0 0</pose>  <!-- Left camera at origin -->
                 <camera>
                     <horizontal_fov>1.3962634</horizontal_fov>  <!-- 80 degrees -->
                     <image>
@@ -25,8 +30,24 @@
                     </image>
                     <clip>
                         <near>0.1</near>
-                        <far>300</far>
+                        <far>10</far>
                     </clip>
+                    <!-- Left camera calibration matrix -->
+                    <!-- <intrinsics>
+                        <fx>858.0626964569092</fx>
+                        <fy>858.0626320838928</fy>
+                        <cx>720.0</cx>
+                        <cy>540.0</cy>
+                        <s>0.0</s>
+                    </intrinsics> -->
+                    <!-- <distortion>
+                        <k1>0.0</k1>
+                        <k2>0.0</k2>
+                        <k3>0.0</k3>
+                        <p1>0.0</p1>
+                        <p2>0.0</p2>
+                        <center>0.5 0.5</center>
+                    </distortion> -->
                     <!-- <noise>
                         <type>gaussian</type>
                         <mean>0.0</mean>
@@ -37,13 +58,16 @@
         </gazebo>
 
         <!-- Right Camera Sensor -->
-        <!-- <gazebo reference="firefly_right_optical_frame">
+        <gazebo reference="firefly_right_camera_frame">
             <sensor name="firefly_right_camera" type="camera">
-                <update_rate>30</update_rate>
-                <always_on>1</always_on>
+                <update_rate>20</update_rate>
+                <always_on>true</always_on>
                 <visualize>true</visualize>
-                <topic>${namespace}/right</topic>
-                <camera name="firefly_right">
+                <topic>/firefly_right/image_raw</topic>
+                <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
+                <camera_info_topic>/firefly_right/camera_info</camera_info_topic>
+                <pose>0 0 0 0 0 0</pose>  <!-- Create 6cm baseline for Gazebo stereo calibration -->
+                <camera>
                     <horizontal_fov>1.3962634</horizontal_fov>
                     <image>
                         <width>1440</width>
@@ -52,16 +76,34 @@
                     </image>
                     <clip>
                         <near>0.01</near>
-                        <far>300</far>
+                        <far>10</far>
                     </clip>
-                    <noise>
+                    <!-- Right camera calibration matrix with stereo baseline -->
+                    <!-- <intrinsics>
+                        <fx>858.0626106262207</fx>
+                        <fy>858.0626964569092</fy>
+                        <cx>720.0</cx>
+                        <cy>540.0</cy>
+                        <s>0.0</s>
+                    </intrinsics> -->
+                    <!-- Stereo projection matrix with 6cm baseline -->
+                    <!-- -fx * baseline = -858.06 * 0.06 -->
+                    <!-- <projection>
+                        <p_fx>858.0626106262207</p_fx>
+                        <p_fy>858.0626964569092</p_fy>
+                        <p_cx>720.0</p_cx>
+                        <p_cy>540.0</p_cy>
+                        <tx>-51.48375</tx> 
+                        <ty>0.0</ty>
+                    </projection> -->
+                    <!-- <noise>
                         <type>gaussian</type>
                         <mean>0.0</mean>
                         <stddev>0.007</stddev>
-                    </noise>
+                    </noise> -->
                 </camera>
             </sensor>
-        </gazebo> -->
+        </gazebo>
 
     </xacro:macro>
 </robot>

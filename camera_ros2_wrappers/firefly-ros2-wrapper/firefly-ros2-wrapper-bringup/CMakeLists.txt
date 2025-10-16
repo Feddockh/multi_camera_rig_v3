@@ -11,6 +11,25 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(spinnaker_camera_driver REQUIRED)
 find_package(spinnaker_synchronized_camera_driver REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(stereo_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(OpenCV REQUIRED)
+
+# Add stereo disparity node
+add_executable(stereo_disparity_node src/stereo_disparity_node.cpp)
+ament_target_dependencies(stereo_disparity_node 
+  rclcpp 
+  sensor_msgs 
+  stereo_msgs 
+  cv_bridge 
+  message_filters
+  OpenCV)
+
+install(TARGETS
+  stereo_disparity_node
+  DESTINATION lib/${PROJECT_NAME})
 
 install (
   DIRECTORY calibs configs launch params
