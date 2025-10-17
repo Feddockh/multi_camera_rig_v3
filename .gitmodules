@@ -6,4 +6,7 @@
 	url = https://github.com/ros-drivers/flir_camera_driver.git
 [submodule "external/FoundationStereo"]
 	path = external/FoundationStereo
-	url = https://github.com/NVlabs/FoundationStereo.git
+	url = https://github.com/Feddockh/FoundationStereo.git
+[submodule "external/RAFT-Stereo"]
+	path = external/RAFT-Stereo
+	url = https://github.com/princeton-vl/RAFT-Stereo.git
