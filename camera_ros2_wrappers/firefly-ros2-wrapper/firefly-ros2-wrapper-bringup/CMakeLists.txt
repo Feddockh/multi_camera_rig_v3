@@ -15,6 +15,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(stereo_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
+find_package(image_geometry REQUIRED)
 find_package(OpenCV REQUIRED)
 
 # Add stereo disparity node
@@ -27,9 +28,27 @@ ament_target_dependencies(stereo_disparity_node
   message_filters
   OpenCV)
 
+# Add point cloud node
+add_executable(point_cloud_node src/point_cloud_node.cpp)
+ament_target_dependencies(point_cloud_node 
+  rclcpp 
+  sensor_msgs 
+  stereo_msgs 
+  cv_bridge 
+  message_filters
+  image_geometry
+  OpenCV)
+
 install(TARGETS
   stereo_disparity_node
+  point_cloud_node
   DESTINATION lib/${PROJECT_NAME})
+
+# Install Python scripts
+install(PROGRAMS
+  scripts/fs_disparity_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install (
   DIRECTORY calibs configs launch params

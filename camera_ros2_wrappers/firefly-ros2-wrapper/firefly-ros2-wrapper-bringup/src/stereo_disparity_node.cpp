@@ -344,6 +344,8 @@ private:
             // Compute disparity
             cv::Mat disparity;
             
+            auto start_time = std::chrono::high_resolution_clock::now();
+            
             int algorithm = this->get_parameter("stereo_algorithm").as_int();
             if (algorithm == 0 && stereo_bm_) {
                 stereo_bm_->compute(left_gray, right_gray, disparity);
@@ -353,6 +355,12 @@ private:
                 RCLCPP_ERROR(this->get_logger(), "No valid stereo algorithm configured");
                 return;
             }
+            
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                "Disparity computation time: %ld ms (%.2f Hz)", 
+                duration.count(), 1000.0 / duration.count());
             
             if (disparity.empty()) {
                 RCLCPP_ERROR(this->get_logger(), "Disparity computation failed");

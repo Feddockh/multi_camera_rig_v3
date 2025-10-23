@@ -1,3 +1,7 @@
+"""
+ros2 run image_view disparity_view --ros-args --remap image:=/firefly/disparity_custom
+"""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -118,31 +122,48 @@ def launch_setup(context, *args, **kwargs):
     # launch_actions.append(disparity_node)
     
     # Custom C++ disparity node for better control
-    custom_disparity_node = Node(
-        package='firefly-ros2-wrapper-bringup',
-        executable='stereo_disparity_node',
-        name='firefly_custom_disparity_node',
-        parameters=[
-            {'use_sim_time': True},
-            {'stereo_algorithm': 1},  # StereoSGBM
-            {'min_disparity': 0},
-            {'num_disparities': 160}, # Must be multiple of 16
-            {'block_size': 5},
-            {'P1': 0},  # 0 = auto-compute from block_size
-            {'P2': 0},  # 0 = auto-compute from block_size
-            {'disp12_max_diff': 1},
-            {'pre_filter_cap': 31},
-            {'uniqueness_ratio': 10},
-            {'speckle_window_size': 200},
-            {'speckle_range': 2},
-            {'mode': 2},  # StereoSGBM::MODE_SGBM_3WAY (best quality)
-            # Camera calibration parameters
-            {'focal_length': 858.0},  # Focal length in pixels (from camera intrinsics)
-            {'baseline': 0.06}        # Baseline in meters (6cm from URDF X-offset)
-        ],
-        output='screen'
-    )
-    launch_actions.append(custom_disparity_node)
+    # custom_disparity_node = Node(
+    #     package='firefly-ros2-wrapper-bringup',
+    #     executable='stereo_disparity_node',
+    #     name='firefly_custom_disparity_node_sgbm',
+    #     parameters=[
+    #         {'use_sim_time': True},
+    #         {'stereo_algorithm': 1},  # StereoSGBM
+    #         {'min_disparity': 0},
+    #         {'num_disparities': 160}, # Must be multiple of 16
+    #         {'block_size': 5},
+    #         {'P1': 0},  # 0 = auto-compute from block_size
+    #         {'P2': 0},  # 0 = auto-compute from block_size
+    #         {'disp12_max_diff': 1},
+    #         {'pre_filter_cap': 31},
+    #         {'uniqueness_ratio': 10},
+    #         {'speckle_window_size': 200},
+    #         {'speckle_range': 2},
+    #         {'mode': 2},  # StereoSGBM::MODE_SGBM_3WAY (best quality)
+    #         # Camera calibration parameters
+    #         {'focal_length': 858.0},  # Focal length in pixels (from camera intrinsics)
+    #         {'baseline': 0.06}        # Baseline in meters (6cm from URDF X-offset)
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(custom_disparity_node)
+
+    # Custom C++ disparity node for better control
+    # custom_disparity_node = Node(
+    #     package='firefly-ros2-wrapper-bringup',
+    #     executable='fs_disparity_node',
+    #     name='firefly_custom_disparity_node_fs',
+    #     parameters=[
+    #         {'use_sim_time': True},
+    #         {'height': 1080},
+    #         {'width': 1440},
+    #         {'baseline': 0.06},
+    #         {'scale_factor': 0.7},
+    #         {'vit_size': 'small'},
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(custom_disparity_node)
     
     # Stage 4: Point cloud generation (optimized for performance and RViz compatibility)
     # point_cloud_node = Node(
@@ -153,7 +174,7 @@ def launch_setup(context, *args, **kwargs):
     #         ('left/camera_info', '/firefly_left/camera_info'),
     #         ('right/camera_info', '/firefly_right/camera_info'),
     #         ('left/image_rect_color', '/firefly_left/image_rect_mono'),  # Use rectified for better results
-    #         ('disparity', '/firefly/disparity'),
+    #         ('disparity', '/firefly/disparity_custom'),
     #         ('points2', '/firefly/points2'),
     #     ],
     #     parameters=[
@@ -167,6 +188,30 @@ def launch_setup(context, *args, **kwargs):
     #     output='screen'
     # )
     # launch_actions.append(point_cloud_node)
+
+    # Custom C++ point cloud node for better performance
+    point_cloud_node = Node(
+        package='firefly-ros2-wrapper-bringup',
+        executable='point_cloud_node',
+        name='firefly_point_cloud_node',
+        remappings=[
+            ('disparity', '/firefly/disparity_custom'),
+            ('left/camera_info', '/firefly_left/camera_info'),
+            ('right/camera_info', '/firefly_right/camera_info'),
+            ('left/image_rect_color', '/firefly_left/image_rect_mono'),
+            ('points2', '/firefly/points2'),
+        ],
+        parameters=[
+            {'use_sim_time': True},
+            {'use_color': True},     # Disable color for now to use 3-way sync
+            {'queue_size': 50},       # Increased queue size
+            {'min_depth': 0.1},       # Minimum depth in meters
+            {'max_depth': 2.0},      # Maximum depth in meters
+            {'organized': False},     # Dense point cloud (no NaN values)
+        ],
+        output='screen'
+    )
+    launch_actions.append(point_cloud_node)
 
     use_rviz_value = use_rviz.perform(context)
     if use_rviz_value.lower() == 'true':
