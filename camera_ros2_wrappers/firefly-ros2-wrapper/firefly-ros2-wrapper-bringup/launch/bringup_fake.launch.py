@@ -2,11 +2,19 @@
 ros2 run image_view disparity_view --ros-args --remap image:=/firefly/disparity_custom
 """
 
+"""
+Notes
+- Run with performance power settings
+- the image transport 'raw' and other settings didn't do anything
+
+"""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command
-from launch_ros.actions import Node
+from launch_ros.actions import Node, ComposableNodeContainer
+from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
@@ -26,19 +34,25 @@ def launch_setup(context, *args, **kwargs):
     firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')
     
     launch_actions = []
+
+    launch_actions.append(SetEnvironmentVariable('ROS_IMAGE_TRANSPORT', 'raw'))
+    launch_actions.append(SetEnvironmentVariable('IMAGE_TRANSPORT', 'raw'))
     
     # Image bridges for Gazebo to ROS2 communication
-    # Using the dedicated image_bridge is faster than parameter_bridge
     image_bridge = Node(
         package='ros_gz_image',
         executable='image_bridge',
         name='firefly_image_bridge',
         arguments=[
-            '/firefly_left/image_raw',
-            '/firefly_right/image_raw',
+            '/firefly_left/image',
+            '/firefly_right/image',
         ],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
+        output='screen',
+        # QoS override to keep latency low
+        parameters=[
+            {'use_sim_time': True},
+            {'qos': 'sensor_data'},  # Options: 'default', 'sensor_data', 'system_default'
+        ],
     )
     launch_actions.append(image_bridge)
 
@@ -48,46 +62,61 @@ def launch_setup(context, *args, **kwargs):
         executable='parameter_bridge',
         name='firefly_camera_info_bridge',
         arguments=[
-            '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
-            '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
+            '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
         ],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
+        output='screen',
+        parameters=[
+            {'use_sim_time': True},
+            {'qos': 'sensor_data'},
+        ],
     )
     launch_actions.append(camera_info_bridge)
 
-    # 2. Stereo processing pipeline
-    # Uncomment stages sequentially as each previous stage is working
+    # 2. Stereo processing pipeline using composable nodes
+    # This approach uses a multi-threaded component container for better performance
+    # with zero-copy intra-process communication between components
     
-    # Stage 1: Left camera monocular rectification
-    left_rectify = Node(
+    # Define rectification nodes as composable components
+    rect_left = ComposableNode(
         package='image_proc',
-        executable='rectify_node',
-        name='firefly_left_rectify_mono',
-        remappings=[
-            ('image', '/firefly_left/image_raw'),
-            ('camera_info', '/firefly_left/camera_info'),
-            ('image_rect', '/firefly_left/image_rect_mono'),
+        plugin='image_proc::RectifyNode',
+        name='left_rectify',
+        namespace='firefly_left',
+        parameters=[
+            {'use_sim_time': True},
+            {'queue_size': 5},  # Buffer frames to handle processing variations
+            {'interpolation': 0},  # INTER_NEAREST (fastest)
         ],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
+        extra_arguments=[{'use_intra_process_comms': True}],
     )
-    launch_actions.append(left_rectify)
     
-    # Stage 2: Right camera monocular rectification  
-    right_rectify = Node(
+    rect_right = ComposableNode(
         package='image_proc',
-        executable='rectify_node',
-        name='firefly_right_rectify_mono',
-        remappings=[
-            ('image', '/firefly_right/image_raw'),
-            ('camera_info', '/firefly_right/camera_info'),
-            ('image_rect', '/firefly_right/image_rect_mono'),
+        plugin='image_proc::RectifyNode',
+        name='right_rectify',
+        namespace='firefly_right',
+        parameters=[
+            {'use_sim_time': True},
+            {'queue_size': 5},
+            {'interpolation': 0},
         ],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
+        extra_arguments=[{'use_intra_process_comms': True}],
     )
-    launch_actions.append(right_rectify)
+    
+    # Create multi-threaded component container for parallel processing
+    stereo_container = ComposableNodeContainer(
+        name='stereo_proc_container',
+        namespace='',
+        package='rclcpp_components',
+        executable='component_container_mt',  # Multi-threaded executor
+        emulate_tty=True,
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+        arguments=['--ros-args', '--log-level', 'WARN'],
+        composable_node_descriptions=[rect_left, rect_right],
+    )
+    launch_actions.append(stereo_container)
     
     # Stage 3: Disparity computation (optimized for performance)
     # disparity_node = Node(
@@ -190,28 +219,28 @@ def launch_setup(context, *args, **kwargs):
     # launch_actions.append(point_cloud_node)
 
     # Custom C++ point cloud node for better performance
-    point_cloud_node = Node(
-        package='firefly-ros2-wrapper-bringup',
-        executable='point_cloud_node',
-        name='firefly_point_cloud_node',
-        remappings=[
-            ('disparity', '/firefly/disparity_custom'),
-            ('left/camera_info', '/firefly_left/camera_info'),
-            ('right/camera_info', '/firefly_right/camera_info'),
-            ('left/image_rect_color', '/firefly_left/image_rect_mono'),
-            ('points2', '/firefly/points2'),
-        ],
-        parameters=[
-            {'use_sim_time': True},
-            {'use_color': True},     # Disable color for now to use 3-way sync
-            {'queue_size': 50},       # Increased queue size
-            {'min_depth': 0.1},       # Minimum depth in meters
-            {'max_depth': 2.0},      # Maximum depth in meters
-            {'organized': False},     # Dense point cloud (no NaN values)
-        ],
-        output='screen'
-    )
-    launch_actions.append(point_cloud_node)
+    # point_cloud_node = Node(
+    #     package='firefly-ros2-wrapper-bringup',
+    #     executable='point_cloud_node',
+    #     name='firefly_point_cloud_node',
+    #     remappings=[
+    #         ('disparity', '/firefly/disparity_custom'),
+    #         ('left/camera_info', '/firefly_left/camera_info'),
+    #         ('right/camera_info', '/firefly_right/camera_info'),
+    #         ('left/image_rect_color', '/firefly_left/image_rect_mono'),
+    #         ('points2', '/firefly/points2'),
+    #     ],
+    #     parameters=[
+    #         {'use_sim_time': True},
+    #         {'use_color': True},     # Disable color for now to use 3-way sync
+    #         {'queue_size': 50},       # Increased queue size
+    #         {'min_depth': 0.1},       # Minimum depth in meters
+    #         {'max_depth': 2.0},      # Maximum depth in meters
+    #         {'organized': False},     # Dense point cloud (no NaN values)
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(point_cloud_node)
 
     use_rviz_value = use_rviz.perform(context)
     if use_rviz_value.lower() == 'true':

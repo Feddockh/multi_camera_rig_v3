@@ -121,8 +121,8 @@ class FoundationStereoNode(Node):
         # Synchronize messages
         self.ts = message_filters.ApproximateTimeSynchronizer(
             [self.left_image_sub, self.right_image_sub],
-            queue_size=50,
-            slop=0.3,
+            queue_size=10,
+            slop=0.1,
             allow_headerless=False
         )
         self.ts.registerCallback(self.stereo_callback)
