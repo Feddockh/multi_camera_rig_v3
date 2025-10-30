@@ -51,7 +51,7 @@ install(PROGRAMS
 )
 
 install (
-  DIRECTORY calibs configs launch params
+  DIRECTORY calibs configs launch params rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

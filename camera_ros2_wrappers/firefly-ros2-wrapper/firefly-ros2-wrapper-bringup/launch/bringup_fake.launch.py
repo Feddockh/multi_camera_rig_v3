@@ -29,41 +29,46 @@ def launch_setup(context, *args, **kwargs):
     
     # Get launch configurations
     use_rviz = LaunchConfiguration('use_rviz')
-    
+    rectify = False
+
     # Package directories
     firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')
+    firefly_bringup_pkg = get_package_share_directory('firefly-ros2-wrapper-bringup')
     
     launch_actions = []
-
-    launch_actions.append(SetEnvironmentVariable('ROS_IMAGE_TRANSPORT', 'raw'))
-    launch_actions.append(SetEnvironmentVariable('IMAGE_TRANSPORT', 'raw'))
     
+    # The issue with the image bridge is that it adds some delay to the raw images because of the 
+    # Overhead added to create compressed and other image formats. Compressed is faster however,
+    # and may be better for some applications.
     # Image bridges for Gazebo to ROS2 communication
-    image_bridge = Node(
-        package='ros_gz_image',
-        executable='image_bridge',
-        name='firefly_image_bridge',
-        arguments=[
-            '/firefly_left/image',
-            '/firefly_right/image',
-        ],
-        output='screen',
-        # QoS override to keep latency low
-        parameters=[
-            {'use_sim_time': True},
-            {'qos': 'sensor_data'},  # Options: 'default', 'sensor_data', 'system_default'
-        ],
-    )
-    launch_actions.append(image_bridge)
+    # image_bridge = Node(
+    #     package='ros_gz_image',
+    #     executable='image_bridge',
+    #     name='firefly_image_bridge',
+    #     arguments=[
+    #         '/firefly_left/image',
+    #         '/firefly_right/image',
+    #     ],
+    #     output='screen',
+    #     # QoS override to keep latency low
+    #     parameters=[
+    #         {'use_sim_time': True},
+    #         {'qos': 'sensor_data'},  # Options: 'default', 'sensor_data', 'system_default'
+    #     ],
+    # )
+    # launch_actions.append(image_bridge)
 
-    # Bridge the camera info topics from Gazebo to ROS2
-    camera_info_bridge = Node(
+    sensor_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        name='firefly_camera_info_bridge',
+        name='firefly_depth_bridge',
         arguments=[
+            '/firefly_left/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_right/image@sensor_msgs/msg/Image[gz.msgs.Image',
             '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_left/depth/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_left/depth/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
         ],
         output='screen',
         parameters=[
@@ -71,52 +76,66 @@ def launch_setup(context, *args, **kwargs):
             {'qos': 'sensor_data'},
         ],
     )
-    launch_actions.append(camera_info_bridge)
+    launch_actions.append(sensor_bridge)
 
-    # 2. Stereo processing pipeline using composable nodes
-    # This approach uses a multi-threaded component container for better performance
-    # with zero-copy intra-process communication between components
-    
-    # Define rectification nodes as composable components
-    rect_left = ComposableNode(
-        package='image_proc',
-        plugin='image_proc::RectifyNode',
-        name='left_rectify',
+    # Registering not necessary because there is no rectification necessary (no intrinsics applied in simulation)
+    rgbd_to_cloud = Node(
+        package='depth_image_proc',
+        executable='point_cloud_xyzrgb_node',
+        name='firefly_rgbd_to_cloud',
         namespace='firefly_left',
-        parameters=[
-            {'use_sim_time': True},
-            {'queue_size': 5},  # Buffer frames to handle processing variations
-            {'interpolation': 0},  # INTER_NEAREST (fastest)
+        remappings=[
+            ('rgb/image_rect_color',        '/firefly_left/image'),
+            ('rgb/camera_info',             '/firefly_left/camera_info'),
+            ('depth_registered/image_rect', '/firefly_left/depth/image'),
+            ('points', 'points2'),
         ],
-        extra_arguments=[{'use_intra_process_comms': True}],
-    )
-    
-    rect_right = ComposableNode(
-        package='image_proc',
-        plugin='image_proc::RectifyNode',
-        name='right_rectify',
-        namespace='firefly_right',
         parameters=[
-            {'use_sim_time': True},
-            {'queue_size': 5},
-            {'interpolation': 0},
+            {'use_sim_time': True}
         ],
-        extra_arguments=[{'use_intra_process_comms': True}],
+        output='screen'
     )
+    launch_actions.append(rgbd_to_cloud)
+
+    # Define rectification nodes as composable components
+    # rect_left = ComposableNode(
+    #     package='image_proc',
+    #     plugin='image_proc::RectifyNode',
+    #     name='left_rectify',
+    #     namespace='firefly_left',
+    #     remappings=[
+    #         ('image', '/firefly_left/image'),
+    #         ('camera_info', '/firefly_left/camera_info')
+    #     ],
+    #     extra_arguments=[{'use_intra_process_comms': True}],
+    # )
     
-    # Create multi-threaded component container for parallel processing
-    stereo_container = ComposableNodeContainer(
-        name='stereo_proc_container',
-        namespace='',
-        package='rclcpp_components',
-        executable='component_container_mt',  # Multi-threaded executor
-        emulate_tty=True,
-        output='screen',
-        parameters=[{'use_sim_time': True}],
-        arguments=['--ros-args', '--log-level', 'WARN'],
-        composable_node_descriptions=[rect_left, rect_right],
-    )
-    launch_actions.append(stereo_container)
+    # rect_right = ComposableNode(
+    #     package='image_proc',
+    #     plugin='image_proc::RectifyNode',
+    #     name='right_rectify',
+    #     namespace='firefly_right',
+    #     parameters=[
+    #         {'use_sim_time': True},
+    #         {'queue_size': 5},
+    #         {'interpolation': 0},
+    #     ],
+    #     extra_arguments=[{'use_intra_process_comms': True}],
+    # )
+    
+    # # Create multi-threaded component container for parallel processing
+    # stereo_container = ComposableNodeContainer(
+    #     name='stereo_proc_container',
+    #     namespace='',
+    #     package='rclcpp_components',
+    #     executable='component_container_mt',  # Multi-threaded executor
+    #     emulate_tty=True,
+    #     output='screen',
+    #     parameters=[{'use_sim_time': True}],
+    #     arguments=['--ros-args', '--log-level', 'WARN'],
+    #     composable_node_descriptions=[rect_left, rect_right],
+    # )
+    # launch_actions.append(stereo_container)
     
     # Stage 3: Disparity computation (optimized for performance)
     # disparity_node = Node(
@@ -245,7 +264,7 @@ def launch_setup(context, *args, **kwargs):
     use_rviz_value = use_rviz.perform(context)
     if use_rviz_value.lower() == 'true':
         rviz_config_file = PathJoinSubstitution([
-            firefly_description_pkg,
+            firefly_bringup_pkg,
             'rviz',
             'view.rviz'
         ])

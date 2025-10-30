@@ -9,50 +9,80 @@
 
         <!-- Left Camera Sensor -->
         <gazebo reference="firefly_left_camera_frame">
-            <sensor name="firefly_left_camera" type="camera">
+
+            <!-- One sensor that publishes BOTH color + depth -->
+            <!-- <sensor name="firefly_left_camera" type="rgbd_camera">
                 <update_rate>20</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/image</topic>
-                <optical_frame_id>firefly_left_camera_optical_frame</optical_frame_id>
-                <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
-                <!-- <pose>0 0 0 0 0 0</pose>  -->
+                <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
+                <topic>/firefly_left</topic>
                 <camera>
-                    <horizontal_fov>1.3962634</horizontal_fov>  <!-- 80 degrees -->
+                    <horizontal_fov>1.3962634</horizontal_fov>
                     <image>
                         <width>1440</width>
                         <height>1080</height>
-                        <!-- <width>1280</width>
-                        <height>960</height> -->
                         <format>R8G8B8</format>
                     </image>
-                    <!-- <anti_aliasing>0</anti_aliasing> -->
+                    <clip>
+                        <near>0.01</near>
+                        <far>5.0</far>
+                    </clip>
+                    <depth_camera>
+                        <clip>
+                            <near>0.1</near>
+                            <far>10</far>
+                        </clip>
+                    </depth_camera>
+                </camera>
+            </sensor> -->
+
+            <sensor name="firefly_left_depth_camera" type="depth">
+                <update_rate>20</update_rate>
+                <visualize>false</visualize>
+                <topic>/firefly_left/depth/image</topic>
+                <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
+                <camera_info_topic>/firefly_left/depth/camera_info</camera_info_topic>
+                <camera>
+                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <image>
+                        <width>1440</width>
+                        <height>1080</height>
+                        <format>R_FLOAT32</format>
+                    </image>
                     <clip>
                         <near>0.01</near>
                         <far>5</far>
                     </clip>
-                    <!-- Left camera calibration matrix -->
-                    <intrinsics>
+                </camera>
+            </sensor>
+
+            <sensor name="firefly_left_camera" type="camera">
+                <update_rate>20</update_rate>
+                <visualize>false</visualize>
+                <topic>/firefly_left/image</topic>
+                <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
+                <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
+                <camera>
+                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <image>
+                        <width>1440</width>
+                        <height>1080</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.01</near>
+                        <far>5</far>
+                    </clip>
+                    <!-- <intrinsics>
                         <fx>858.0626964569092</fx>
                         <fy>858.0626320838928</fy>
                         <cx>720.0</cx>
                         <cy>540.0</cy>
                         <s>0.0</s>
-                    </intrinsics>
-                    <!-- <distortion>
-                        <k1>0.0</k1>
-                        <k2>0.0</k2>
-                        <k3>0.0</k3>
-                        <p1>0.0</p1>
-                        <p2>0.0</p2>
-                        <center>0.5 0.5</center>
-                    </distortion> -->
-                    <!-- <noise>
-                        <type>gaussian</type>
-                        <mean>0.0</mean>
-                        <stddev>0.007</stddev>
-                    </noise> -->
+                    </intrinsics> -->
                 </camera>
             </sensor>
+
         </gazebo>
 
         <!-- Right Camera Sensor -->
@@ -61,7 +91,7 @@
                 <update_rate>20</update_rate>
                 <visualize>false</visualize>
                 <topic>/firefly_right/image</topic>
-                <optical_frame_id>firefly_right_camera_optical_frame</optical_frame_id>
+                <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_right/camera_info</camera_info_topic>
                 <!-- Create 6cm baseline for Gazebo stereo calibration -->
                 <!-- <pose>0 0 0 0 0 0</pose>   -->
@@ -80,13 +110,13 @@
                         <far>5</far>
                     </clip>
                     <!-- Right camera calibration matrix with stereo baseline -->
-                    <intrinsics>
+                    <!-- <intrinsics>
                         <fx>858.0626106262207</fx>
                         <fy>858.0626964569092</fy>
                         <cx>720.0</cx>
                         <cy>540.0</cy>
                         <s>0.0</s>
-                    </intrinsics>
+                    </intrinsics> -->
                     <!-- Stereo projection matrix with 6cm baseline -->
                     <!-- -fx * baseline = -858.06 * 0.06 -->
                     <!-- <projection>
