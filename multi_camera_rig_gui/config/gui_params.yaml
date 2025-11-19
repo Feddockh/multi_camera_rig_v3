@@ -1,0 +1,74 @@
+/**:
+  ros__parameters:
+    # Image topics for display
+    image_topics:
+      img1: "/spinnaker_sync_node/firefly_left/image_raw/compressed"
+      img2: "/ximea/image_raw"
+    
+    # Flash duration slider settings (ms)
+    flash_duration:
+      min: 0
+      max: 300
+      default: 100
+      node: "/trigger_node"
+      param:
+        - "flash_duration_ms"
+      service: "/trigger/set_flash_duration"
+    
+    # Frame rate slider settings (Hz)
+    frame_rate:
+      min: 1
+      max: 20
+      default: 20
+      node: "/trigger_node"
+      param:
+        - "frame_rate_hz"
+      service: "/trigger/set_frame_rate"
+    
+    # Firefly camera exposure settings (microseconds)
+    firefly_exposure:
+      min: 29
+      max: 10000
+      default: 10000
+      node: "/spinnaker_sync_node"
+      param:
+        - "firefly_left.exposure_time"
+        - "firefly_right.exposure_time"
+    
+    # Ximea camera gain settings (dB)
+    ximea_gain:
+      min: -1.5
+      max: 6.0
+      default: 0.0
+      step: 0.1
+      node: "/ximea_camera"
+      param:
+        - "gain"
+    
+    # Ximea camera exposure settings (microseconds)
+    ximea_exposure:
+      min: 50
+      max: 500000
+      default: 10000
+      node: "/ximea_camera"
+      param:
+        - "exposure_time"
+    
+    # Trigger services
+    trigger_start_service: "/trigger/start_video"
+    trigger_stop_service: "/trigger/stop_video"
+    
+    # Recording settings
+    recording:
+      topics:
+        - "/spinnaker_sync_node/firefly_left/image_raw"
+        - "/ximea/image_raw"
+        - "/trigger/status"
+      storage_path: "~/tmp"
+      storage_id: "sqlite3"
+      serialization_format: "cdr"
+      qos_profile_file: "qos_profile.yaml"
+    
+    # GUI settings
+    window_title: "Multi-Camera Rig Control"
+    update_rate_hz: 60.0

@@ -8,10 +8,47 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(camera_info_manager REQUIRED)
+find_package(OpenCV REQUIRED)
 
-install (
-  DIRECTORY calibs launch
-  DESTINATION share/${PROJECT_NAME}
+# Find Ximea API
+find_path(XIMEA_INCLUDE_DIR NAMES m3api/xiApi.h PATHS /opt/XIMEA/include)
+find_library(XIMEA_LIBRARY NAMES m3api PATHS /opt/XIMEA/lib)
+
+if(NOT XIMEA_INCLUDE_DIR OR NOT XIMEA_LIBRARY)
+  message(FATAL_ERROR "Ximea API not found. Please install Ximea SDK.")
+endif()
+
+message(STATUS "Found Ximea API: ${XIMEA_LIBRARY}")
+
+# Add ximea camera node
+add_executable(ximea_camera_node src/ximea_camera_node.cpp)
+ament_target_dependencies(ximea_camera_node 
+  rclcpp 
+  sensor_msgs
+  std_msgs
+  cv_bridge
+  camera_info_manager
+  OpenCV)
+target_include_directories(ximea_camera_node PRIVATE 
+  ${XIMEA_INCLUDE_DIR}
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(ximea_camera_node ${XIMEA_LIBRARY})
+
+install(TARGETS
+  ximea_camera_node
+  DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+  calibs
+  launch
+  configs
+  DESTINATION share/${PROJECT_NAME}/
 )
 
 if(BUILD_TESTING)

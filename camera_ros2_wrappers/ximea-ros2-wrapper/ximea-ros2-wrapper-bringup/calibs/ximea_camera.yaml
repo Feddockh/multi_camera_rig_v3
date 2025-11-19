@@ -1,0 +1,30 @@
+# Example camera calibration file
+# This is a placeholder - replace with calibration data
+
+image_width: 2048
+image_height: 1088
+camera_name: ximea_camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [2936.372218898136, 0.0, 962.4673416385475, 
+         0.0, 2938.4829343043007, 533.1870572098809,
+         0.0, 0.0, 1.0]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.016610862649983252, -3.2038105117892344, 0.001134312911267026, -0.0031614099689321515,
+    25.60466437656544]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0,
+         0.0, 1.0, 0.0,
+         0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [2936.372314453125, 0.0, 962.4673461914062,
+         0.0, 0.0, 2938.48291015625, 533.1870727539062,
+         0.0, 0.0, 0.0, 1.0, 0.0]

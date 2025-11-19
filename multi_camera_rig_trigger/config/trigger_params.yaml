@@ -1,0 +1,14 @@
+# Configuration for multi_camera_rig_trigger node
+
+trigger_node:
+  ros__parameters:
+    # Serial port configuration
+    serial_port: "/dev/ttyUSB0"
+    baudrate: 9600
+    
+    # Trigger settings
+    flash_duration_ms: 100    # Flash duration in milliseconds (0-300)
+    frame_rate_hz: 10       # Trigger frame rate in Hz (1-20)
+    
+    # Startup behavior
+    auto_connect: true        # Test connection on startup

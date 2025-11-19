@@ -29,7 +29,6 @@ def launch_setup(context, *args, **kwargs):
     
     # Get launch configurations
     use_rviz = LaunchConfiguration('use_rviz')
-    rectify = False
 
     # Package directories
     firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')

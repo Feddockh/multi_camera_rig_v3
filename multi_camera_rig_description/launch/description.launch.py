@@ -8,8 +8,8 @@ import os
 
 
 def generate_launch_description():
-    description_pkg = get_package_share_directory('multi_cam_rig_description')
-    urdf_file = os.path.join(description_pkg, 'urdf', 'multi_cam_rig_description.urdf.xacro')
+    description_pkg = get_package_share_directory('multi_camera_rig_description')
+    urdf_file = os.path.join(description_pkg, 'urdf', 'multi_camera_rig_description.urdf.xacro')
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),

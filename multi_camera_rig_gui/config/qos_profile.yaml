@@ -1,0 +1,20 @@
+# QoS Profile for ROS2 Bag Recording
+# Configure Quality of Service settings for topic recording
+
+/firefly/image_raw:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
+
+/ximea/image_raw:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
+
+/trigger/status:
+  history: keep_last
+  depth: 100
+  reliability: reliable
+  durability: volatile

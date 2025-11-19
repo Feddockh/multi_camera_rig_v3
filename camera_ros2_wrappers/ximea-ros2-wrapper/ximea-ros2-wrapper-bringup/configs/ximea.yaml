@@ -1,0 +1,21 @@
+# Ximea Camera Configuration
+# Initial parameters for the Ximea camera node
+
+camera_name: "ximea_camera"
+device_id: 0
+frame_id: "ximea_optical_frame"
+
+# Hardware trigger timeout (milliseconds)
+# 2000000000 ms ≈ 23 days (effectively "infinite" for most use cases)
+trigger_timeout_ms: 2000000000
+
+# Camera settings
+gain: 6.0            # dB, range: -1.5 to 6.0 (depending on camera model)
+exposure_time: 300000  # microseconds (range: 1 to 2000000)
+
+# Flat field correction
+enable_ffc: true
+ffc_dir: "__ffc_dir__"  # Updated later
+
+# Optional: you can let the launch file set this from calib_dir instead
+camera_info_url: "__camerainfo_url__" # Updated later

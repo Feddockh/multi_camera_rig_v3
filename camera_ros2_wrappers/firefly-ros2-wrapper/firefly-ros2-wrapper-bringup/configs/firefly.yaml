@@ -30,6 +30,7 @@ firefly_left:
   exposure_mode: 'Timed'
   exposure_auto: 'Off'
   exposure_time: 100.0
+  # exposure_time: 10000.0
 
   trigger_mode: 'On'
   trigger_selector: 'FrameStart'
@@ -105,6 +106,7 @@ firefly_right:
   exposure_mode: 'Timed'
   exposure_auto: 'Off'
   exposure_time: 100.0
+  # exposure_time: 10000.0
 
   trigger_mode: 'On'
   trigger_selector: 'FrameStart'
