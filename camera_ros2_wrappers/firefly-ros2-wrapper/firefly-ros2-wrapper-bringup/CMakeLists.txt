@@ -39,9 +39,19 @@ ament_target_dependencies(point_cloud_node
   image_geometry
   OpenCV)
 
+# Add flash simulator node
+add_executable(flash_simulator_node src/flash_simulator_node.cpp)
+ament_target_dependencies(flash_simulator_node 
+  rclcpp 
+  sensor_msgs 
+  cv_bridge 
+  message_filters
+  OpenCV)
+
 install(TARGETS
   stereo_disparity_node
   point_cloud_node
+  flash_simulator_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Install Python scripts

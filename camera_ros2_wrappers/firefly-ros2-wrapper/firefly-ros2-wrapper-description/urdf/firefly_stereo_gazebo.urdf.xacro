@@ -59,7 +59,7 @@
             <sensor name="firefly_left_camera" type="camera">
                 <update_rate>20</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/image</topic>
+                <topic>/firefly_left/image_raw</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
                 <camera>
@@ -90,7 +90,7 @@
             <sensor name="firefly_right_camera" type="camera">
                 <update_rate>20</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_right/image</topic>
+                <topic>/firefly_right/image_raw</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_right/camera_info</camera_info_topic>
                 <!-- Create 6cm baseline for Gazebo stereo calibration -->

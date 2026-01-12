@@ -62,8 +62,8 @@ def launch_setup(context, *args, **kwargs):
         executable='parameter_bridge',
         name='firefly_depth_bridge',
         arguments=[
-            '/firefly_left/image@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/firefly_right/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_left/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_right/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
             '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/firefly_left/depth/image@sensor_msgs/msg/Image[gz.msgs.Image',
@@ -76,6 +76,24 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
     launch_actions.append(sensor_bridge)
+
+    # Flash simulator node - applies flash effect to left camera
+    flash_simulator = Node(
+        package='firefly-ros2-wrapper-bringup',
+        executable='flash_simulator_node',
+        name='firefly_flash_simulator',
+        parameters=[
+            {'use_sim_time': True},
+            {'flash_intensity': 2.5},        # Flash brightness multiplier
+            {'shutter_speed': 0.1},          # Base image brightness (simulates fast shutter)
+            {'max_flash_distance': 1.5},     # Maximum effective flash distance (meters)
+            {'color_topic': '/firefly_left/image_raw'},
+            {'depth_topic': '/firefly_left/depth/image'},
+            {'output_topic': '/firefly_left/image'},
+        ],
+        output='screen'
+    )
+    launch_actions.append(flash_simulator)
 
     # Registering not necessary because there is no rectification necessary (no intrinsics applied in simulation)
     rgbd_to_cloud = Node(

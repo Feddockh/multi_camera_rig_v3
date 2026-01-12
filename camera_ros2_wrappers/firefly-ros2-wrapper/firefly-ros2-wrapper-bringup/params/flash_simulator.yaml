@@ -1,0 +1,21 @@
+# Flash Simulator Configuration
+# Adjust these parameters to tune the flash effect
+
+flash_simulator_node:
+  ros__parameters:
+    # Flash parameters
+    flash_intensity: 2.5      # Multiplier for flash brightness (1.0 = no flash, 2.0-3.0 = strong flash)
+    shutter_speed: 0.1        # Base image brightness multiplier (0.3-0.7 = darker background)
+    max_flash_distance: 1.5   # Maximum effective flash range in meters
+    
+    # Camera parameters (typically don't need to change)
+    near_plane: 0.01          # Near clipping plane (meters)
+    far_plane: 20.0           # Far clipping plane (meters)
+    
+    # Topic configuration
+    color_topic: "/firefly_left/image_raw"
+    depth_topic: "/firefly_left/depth/image"
+    output_topic: "/firefly_left/image"
+    
+    # Processing parameters
+    queue_size: 10
