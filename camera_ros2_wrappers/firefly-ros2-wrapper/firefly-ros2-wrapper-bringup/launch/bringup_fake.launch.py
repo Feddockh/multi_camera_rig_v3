@@ -95,6 +95,26 @@ def launch_setup(context, *args, **kwargs):
     )
     launch_actions.append(flash_simulator)
 
+    # Apply point very far away for pixels with no depth
+    # This is important for establishing free space in the occupancy map
+    # Invalid pixels are downsampled to reduce redundant ray casting
+    depth_cleaner = Node(
+        package='firefly-ros2-wrapper-bringup',
+        executable='depth_cleaner_node',
+        name='firefly_depth_cleaner',
+        parameters=[
+            {'use_sim_time': True},
+            {'input_depth_topic': '/firefly_left/depth/image'},
+            {'output_depth_topic': '/firefly_left/depth/image_cleaned'},
+            {'max_depth': 5.0},                  # Max valid depth in meters
+            {'invalid_depth_value': 5.0},        # Depth value for invalid pixels (match octomap max_range)
+            {'invalid_pixel_stride': 4},         # Keep every Nth invalid pixel (1=all, 2=half, 4=quarter, 8=eighth)
+            {'preserve_valid_pixels': True},     # Always keep valid depth measurements
+        ],
+        output='screen'
+    )
+    launch_actions.append(depth_cleaner)
+
     # Registering not necessary because there is no rectification necessary (no intrinsics applied in simulation)
     rgbd_to_cloud = Node(
         package='depth_image_proc',
@@ -104,7 +124,7 @@ def launch_setup(context, *args, **kwargs):
         remappings=[
             ('rgb/image_rect_color',        '/firefly_left/image'),
             ('rgb/camera_info',             '/firefly_left/camera_info'),
-            ('depth_registered/image_rect', '/firefly_left/depth/image'),
+            ('depth_registered/image_rect', '/firefly_left/depth/image_cleaned'),
             ('points', 'points2'),
         ],
         parameters=[

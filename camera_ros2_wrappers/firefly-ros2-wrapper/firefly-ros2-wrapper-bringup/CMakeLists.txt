@@ -48,10 +48,19 @@ ament_target_dependencies(flash_simulator_node
   message_filters
   OpenCV)
 
+# Add depth cleaner node
+add_executable(depth_cleaner_node src/depth_cleaner_node.cpp)
+ament_target_dependencies(depth_cleaner_node 
+  rclcpp 
+  sensor_msgs 
+  cv_bridge 
+  OpenCV)
+
 install(TARGETS
   stereo_disparity_node
   point_cloud_node
   flash_simulator_node
+  depth_cleaner_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Install Python scripts
