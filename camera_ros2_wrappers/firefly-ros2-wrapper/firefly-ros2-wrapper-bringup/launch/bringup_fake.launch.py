@@ -106,6 +106,7 @@ def launch_setup(context, *args, **kwargs):
             {'use_sim_time': True},
             {'input_depth_topic': '/firefly_left/depth/image'},
             {'output_depth_topic': '/firefly_left/depth/image_cleaned'},
+            {'min_depth': 0.01},                  # Min valid depth (filters sensor origin artifacts)
             {'max_depth': 5.0},                  # Max valid depth in meters
             {'invalid_depth_value': 5.0},        # Depth value for invalid pixels (match octomap max_range)
             {'invalid_pixel_stride': 4},         # Keep every Nth invalid pixel (1=all, 2=half, 4=quarter, 8=eighth)
