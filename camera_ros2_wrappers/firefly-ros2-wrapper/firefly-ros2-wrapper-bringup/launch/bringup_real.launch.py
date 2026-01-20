@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 from launch.actions import OpaqueFunction
 from launch.substitutions import PathJoinSubstitution as PJoin
@@ -37,14 +37,45 @@ def launch_setup(context, *args, **kwargs):
                 package='spinnaker_synchronized_camera_driver',
                 plugin='spinnaker_synchronized_camera_driver::SynchronizedCameraDriver',
                 name='spinnaker_sync_node',
+                namespace='',
                 parameters=[spinnaker_config],
                 extra_arguments=[{'use_intra_process_comms': True}],
+                remappings=[
+                    ('~/firefly_left/camera_info', '/firefly_left/camera_info'),
+                    ('~/firefly_left/image_raw', '/firefly_left/image_raw'),
+                    ('~/firefly_left/image_raw_compressed', '/firefly_left/image_raw_compressed'),
+                    ('~/firefly_left/meta', '/firefly_left/meta'),
+                    ('~/firefly_right/camera_info', '/firefly_right/camera_info'),
+                    ('~/firefly_right/image_raw', '/firefly_right/image_raw'),
+                    ('~/firefly_right/image_raw_compressed', '/firefly_right/image_raw_compressed'),
+                    ('~/firefly_right/meta', '/firefly_right/meta'),
+                ],
             ),
         ],
         output='screen',
         arguments=['--ros-args', '--log-level', 'warn'],  # Adjust log level as needed
     )
-    return [spinnaker_sync_container]
+    
+    # Add trigger node if enabled
+    enable_trigger = LaunchConfig('enable_trigger').perform(context).lower() == 'true'
+    if enable_trigger:
+        trigger_node = Node(
+            package='multi_camera_rig_trigger',
+            executable='trigger_node',
+            name='trigger_node',
+            output='screen',
+            parameters=[{
+                'serial_port': LaunchConfig('trigger_serial_port'),
+                'baudrate': LaunchConfig('trigger_baudrate'),
+                'flash_duration_ms': LaunchConfig('trigger_flash_duration_ms'),
+                'frame_rate_hz': LaunchConfig('trigger_frame_rate_hz'),
+                'auto_connect': LaunchConfig('trigger_auto_connect'),
+                'auto_start': LaunchConfig('trigger_auto_start'),
+            }]
+        )
+        return [spinnaker_sync_container, trigger_node]
+    else:
+        return [spinnaker_sync_container]
 
 def generate_launch_description():
     return LaunchDescription([
@@ -62,6 +93,41 @@ def generate_launch_description():
             'spinnaker_param_file',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'params', 'firefly.yaml']),
             description='Path to the Spinnaker camera parameter definitions YAML file.',
+        ),
+        LaunchArg(
+            'enable_trigger',
+            default_value='true',
+            description='Enable hardware trigger node'
+        ),
+        LaunchArg(
+            'trigger_serial_port',
+            default_value='/dev/ttyUSB0',
+            description='Serial port for trigger hardware'
+        ),
+        LaunchArg(
+            'trigger_baudrate',
+            default_value='9600',
+            description='Trigger serial baudrate'
+        ),
+        LaunchArg(
+            'trigger_flash_duration_ms',
+            default_value='100',
+            description='Flash duration in milliseconds (0-300)'
+        ),
+        LaunchArg(
+            'trigger_frame_rate_hz',
+            default_value='1',
+            description='Trigger frame rate in Hz (1-20)'
+        ),
+        LaunchArg(
+            'trigger_auto_connect',
+            default_value='true',
+            description='Automatically test trigger connection on startup'
+        ),
+        LaunchArg(
+            'trigger_auto_start',
+            default_value='true',
+            description='Automatically start video triggering on launch'
         ),
         OpaqueFunction(function=launch_setup)
     ])

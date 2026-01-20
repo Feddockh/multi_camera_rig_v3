@@ -81,12 +81,22 @@ class TriggerNode(Node):
             )
         )
         
+        self.declare_parameter(
+            'auto_start',
+            False,
+            ParameterDescriptor(
+                description='Automatically start video triggering on startup',
+                type=ParameterType.PARAMETER_BOOL
+            )
+        )
+        
         # Get parameters
         port = self.get_parameter('serial_port').value
         baudrate = self.get_parameter('baudrate').value
         self.flash_duration = self.get_parameter('flash_duration_ms').value
         self.frame_rate = self.get_parameter('frame_rate_hz').value
         auto_connect = self.get_parameter('auto_connect').value
+        auto_start = self.get_parameter('auto_start').value
         
         # Initialize hardware interface
         self.hardware = TriggerHardwareInterface(port=port, baudrate=baudrate)
@@ -143,6 +153,21 @@ class TriggerNode(Node):
         # Test connection on startup if requested
         if auto_connect:
             self.test_connection()
+            
+        # Auto-start video triggering if requested
+        if auto_start:
+            # First set hardware parameters
+            success_flash, _ = self.hardware.set_flash_duration(self.flash_duration)
+            success_rate, _ = self.hardware.set_frame_rate(self.frame_rate)
+            
+            if success_flash and success_rate:
+                success, message = self.hardware.start_video()
+                if success:
+                    self.publish_status(f"Auto-started video recording at {self.frame_rate} Hz with {self.flash_duration} ms flash duration")
+                else:
+                    self.get_logger().error(f"Failed to auto-start video: {self.escape_control_chars(message)}")
+            else:
+                self.get_logger().error("Failed to set hardware parameters during auto-start")
     
     def publish_status(self, message: str):
         """Publish status message."""
