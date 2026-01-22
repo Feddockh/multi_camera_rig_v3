@@ -227,10 +227,99 @@ private:
     std::unordered_map<std::string, size_t> idx_;
 };
 
-class FoundationStereoPointsNode : public rclcpp::Node
+static std::string toLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c)
+                   { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+static rmw_qos_reliability_policy_t parseReliability(const std::string &s)
+{
+    const auto v = toLower(s);
+    if (v == "reliable")
+        return RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+    if (v == "best_effort" || v == "besteffort" || v == "best-effort")
+        return RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
+    if (v == "system_default" || v == "default")
+        return RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
+    throw std::runtime_error("Invalid reliability: " + s);
+}
+
+static rmw_qos_durability_policy_t parseDurability(const std::string &s)
+{
+    const auto v = toLower(s);
+    if (v == "volatile")
+        return RMW_QOS_POLICY_DURABILITY_VOLATILE;
+    if (v == "transient_local" || v == "transientlocal" || v == "transient-local")
+        return RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+    if (v == "system_default" || v == "default")
+        return RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT;
+    throw std::runtime_error("Invalid durability: " + s);
+}
+
+static rmw_qos_history_policy_t parseHistory(const std::string &s)
+{
+    const auto v = toLower(s);
+    if (v == "keep_last" || v == "keeplast")
+        return RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+    if (v == "keep_all" || v == "keepall")
+        return RMW_QOS_POLICY_HISTORY_KEEP_ALL;
+    if (v == "system_default" || v == "default")
+        return RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT;
+    throw std::runtime_error("Invalid history: " + s);
+}
+
+// Build an rclcpp::QoS from user strings (Humble API)
+static rclcpp::QoS makeQos(
+    const std::string &reliability,
+    const std::string &durability,
+    const std::string &history,
+    int depth)
+{
+    auto hist = parseHistory(history);
+
+    // rclcpp::QoS requires an initialization; use KeepLast(depth) for KEEP_LAST,
+    // and KeepAll() for KEEP_ALL.
+    rclcpp::QoS qos =
+        (hist == RMW_QOS_POLICY_HISTORY_KEEP_ALL)
+            ? rclcpp::QoS(rclcpp::KeepAll())
+            : rclcpp::QoS(rclcpp::KeepLast(std::max(1, depth)));
+
+    // Apply reliability
+    switch (parseReliability(reliability))
+    {
+    case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
+        qos.reliable();
+        break;
+    case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
+        qos.best_effort();
+        break;
+    default: /* SYSTEM_DEFAULT */
+        break;
+    }
+
+    // Apply durability
+    switch (parseDurability(durability))
+    {
+    case RMW_QOS_POLICY_DURABILITY_VOLATILE:
+        qos.durability_volatile();
+        break;
+    case RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:
+        qos.transient_local();
+        break;
+    default: /* SYSTEM_DEFAULT */
+        break;
+    }
+
+    return qos;
+}
+
+class FoundationStereoMatcherNode : public rclcpp::Node
 {
 public:
-    FoundationStereoPointsNode() : Node("foundation_stereo_points_node")
+    FoundationStereoMatcherNode() : Node("foundation_stereo_matcher_node")
     {
         engine_path_ = declare_parameter<std::string>("engine_path", "");
         baseline_ = declare_parameter<double>("baseline", 0.06);
@@ -243,25 +332,49 @@ public:
         stride_ = declare_parameter<int>("stride", 2); // 1=full model res, 2=quarter points, 4=1/16 points
         max_range_m_ = declare_parameter<double>("max_range_m", 10.0);
 
-        auto qos = rclcpp::SensorDataQoS();
+        // Outputs + topics
+        publish_cloud_ = declare_parameter<bool>("publish_cloud", true);
+        publish_depth_ = declare_parameter<bool>("publish_depth", true);
+        publish_disparity_ = declare_parameter<bool>("publish_disparity", false);
+
+        cloud_topic_ = declare_parameter<std::string>("cloud_topic", "/stereo/points");
+        depth_topic_ = declare_parameter<std::string>("depth_topic", "/stereo/depth");
+        disparity_topic_ = declare_parameter<std::string>("disparity_topic", "/stereo/disparity");
+
+        // QoS params for pubs/subs
+        sub_rel_ = declare_parameter<std::string>("sub_qos.reliability", "reliable");
+        sub_dur_ = declare_parameter<std::string>("sub_qos.durability", "volatile");
+        sub_hist_ = declare_parameter<std::string>("sub_qos.history", "keep_last");
+        sub_depth_ = declare_parameter<int>("sub_qos.depth", 5);
+
+        pub_rel_ = declare_parameter<std::string>("pub_qos.reliability", "best_effort");
+        pub_dur_ = declare_parameter<std::string>("pub_qos.durability", "volatile");
+        pub_hist_ = declare_parameter<std::string>("pub_qos.history", "keep_last");
+        pub_depth_ = declare_parameter<int>("pub_qos.depth", 5);
+
+        auto sub_qos = makeQos(sub_rel_, sub_dur_, sub_hist_, sub_depth_);
+        auto pub_qos = makeQos(pub_rel_, pub_dur_, pub_hist_, pub_depth_);
 
         info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-            info_topic_, qos, std::bind(&FoundationStereoPointsNode::onInfo, this, std::placeholders::_1));
+            info_topic_, sub_qos, std::bind(&FoundationStereoMatcherNode::onInfo, this, std::placeholders::_1));
+        left_sub_.subscribe(this, left_topic_, sub_qos.get_rmw_qos_profile());
+        right_sub_.subscribe(this, right_topic_, sub_qos.get_rmw_qos_profile());
 
-        left_sub_.subscribe(this, left_topic_, rmw_qos_profile_sensor_data);
-        right_sub_.subscribe(this, right_topic_, rmw_qos_profile_sensor_data);
+        // Create the publishers (if enabled)
+        if (publish_cloud_)
+            cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(cloud_topic_, pub_qos);
+        if (publish_depth_)
+            depth_pub_ = create_publisher<sensor_msgs::msg::Image>(depth_topic_, pub_qos);
+        if (publish_disparity_)
+            disp_pub_ = create_publisher<sensor_msgs::msg::Image>(disparity_topic_, pub_qos);
 
         // using Policy = message_filters::sync_policies::ApproximateTime<
         //     sensor_msgs::msg::Image, sensor_msgs::msg::Image>;
         using Policy = message_filters::sync_policies::ExactTime<
             sensor_msgs::msg::Image, sensor_msgs::msg::Image>;
         sync_ = std::make_shared<message_filters::Synchronizer<Policy>>(Policy(5), left_sub_, right_sub_);
-        // using ExactPolicy = message_filters::sync_policies::ExactTime<Image, Image>;
-        // std::shared_ptr<message_filters::Synchronizer<ExactPolicy>> sync_;
-        sync_->registerCallback(std::bind(&FoundationStereoPointsNode::onStereo, this,
+        sync_->registerCallback(std::bind(&FoundationStereoMatcherNode::onStereo, this,
                                           std::placeholders::_1, std::placeholders::_2));
-
-        cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("/firefly/points_fs", qos);
 
         if (engine_path_.empty())
             throw std::runtime_error("engine_path param is empty");
@@ -294,6 +407,14 @@ private:
         cam_w_ = msg->width;
         cam_h_ = msg->height;
         have_info_ = true;
+
+        // Check that msg->width/height matches engine input
+        if ((int)msg->width != in_w_ || (int)msg->height != in_h_)
+        {
+            RCLCPP_WARN(get_logger(),
+                        "CameraInfo size (%dx%d) does not match engine input (%dx%d)",
+                        msg->width, msg->height, in_w_, in_h_);
+        }
     }
 
     static inline void bgrToNCHWFloat(const cv::Mat &bgr, int H, int W, std::vector<float> &out)
@@ -342,29 +463,79 @@ private:
 
         // Resize to engine input (and we will sample RGB from left_rs)
         cv::Mat left_rs, right_rs;
-        cv::resize(left_cv->image, left_rs, cv::Size(in_w_, in_h_), 0, 0, cv::INTER_LINEAR);
-        cv::resize(right_cv->image, right_rs, cv::Size(in_w_, in_h_), 0, 0, cv::INTER_LINEAR);
+        // Expect inputs already match the engine input resolution.
+        if ((int)left_cv->image.cols != in_w_ || (int)left_cv->image.rows != in_h_ ||
+            (int)right_cv->image.cols != in_w_ || (int)right_cv->image.rows != in_h_)
+        {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                                 "Input image size (%dx%d) does not match engine (%dx%d). "
+                                 "Use stereo_rectify_scale_node or adjust output size.",
+                                 left_cv->image.cols, left_cv->image.rows, in_w_, in_h_);
+            return;
+        }
 
-        // NCHW float32
-        bgrToNCHWFloat(left_rs, in_h_, in_w_, left_nchw_);
-        bgrToNCHWFloat(right_rs, in_h_, in_w_, right_nchw_);
-
+        bgrToNCHWFloat(left_cv->image, in_h_, in_w_, left_nchw_);
+        bgrToNCHWFloat(right_cv->image, in_h_, in_w_, right_nchw_);
         const auto t1 = now();
         runner_->run(left_nchw_.data(), right_nchw_.data(), disp_.data(), disp_.size());
         const auto t2 = now();
 
-        // Scale intrinsics to model resolution (rectified)
-        const double sw = static_cast<double>(in_w_) / static_cast<double>(cam_w_);
-        const double sh = static_cast<double>(in_h_) / static_cast<double>(cam_h_);
+        // Publish disparity image if needed
+        if (publish_disparity_)
+        {
+            sensor_msgs::msg::Image disp_msg;
+            disp_msg.header = left_msg->header;
+            disp_msg.height = out_h_;
+            disp_msg.width = out_w_;
+            disp_msg.encoding = "32FC1";
+            disp_msg.is_bigendian = false;
+            disp_msg.step = out_w_ * sizeof(float);
+            disp_msg.data.resize((size_t)out_h_ * disp_msg.step);
+            std::memcpy(disp_msg.data.data(), disp_.data(), (size_t)out_h_ * disp_msg.step);
+            disp_pub_->publish(disp_msg);
+        }
 
-        const double fx = fx_ * sw;
-        const double fy = fy_ * sh;
-        const double cx = cx_ * sw;
-        const double cy = cy_ * sh;
-
+        // Grab the camera intrinsics
+        const double fx = fx_;
+        const double fy = fy_;
+        const double cx = cx_;
+        const double cy = cy_;
         const double B = baseline_;
         const double maxR = max_range_m_;
         const int s = std::max(1, stride_);
+
+        // Publish depth image if needed
+        if (publish_depth_)
+        {
+            std::vector<float> depth((size_t)out_h_ * out_w_, std::numeric_limits<float>::quiet_NaN());
+
+            for (int v = 0; v < out_h_; ++v)
+            {
+                const float *row = disp_.data() + v * out_w_;
+                float *drow = depth.data() + v * out_w_;
+                for (int u = 0; u < out_w_; ++u)
+                {
+                    const float disp = row[u];
+                    if (disp <= 0.0f)
+                        continue;
+                    const double Z = fx * B / (double)disp;
+                    if (Z <= 0.0 || Z > maxR)
+                        continue;
+                    drow[u] = (float)Z;
+                }
+            }
+
+            sensor_msgs::msg::Image depth_msg;
+            depth_msg.header = left_msg->header;
+            depth_msg.height = out_h_;
+            depth_msg.width = out_w_;
+            depth_msg.encoding = "32FC1";
+            depth_msg.is_bigendian = false;
+            depth_msg.step = out_w_ * sizeof(float);
+            depth_msg.data.resize(depth.size() * sizeof(float));
+            std::memcpy(depth_msg.data.data(), depth.data(), depth.size() * sizeof(float));
+            depth_pub_->publish(depth_msg);
+        }
 
         // Helper: pack RGB into a float (PCL convention used by RViz "RGB8")
         auto packRGBFloat = [](uint8_t r, uint8_t g, uint8_t b) -> float
@@ -451,7 +622,7 @@ private:
                 const float Zf = static_cast<float>(Z);
 
                 // Sample color from resized left image at the same pixel (u,v)
-                const cv::Vec3b bgr = left_rs.at<cv::Vec3b>(v, u);
+                const cv::Vec3b bgr = left_cv->image.at<cv::Vec3b>(v, u);
                 const float rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]); // r,g,b
 
                 uint8_t *ptr = cloud.data.data() + idx * cloud.point_step;
@@ -472,7 +643,7 @@ private:
         const double pc_ms = (t3 - t2).seconds() * 1e3;
 
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500,
-                             "prep %.1f ms | infer %.1f ms | cloud %.1f ms | points %u (stride %d)",
+                             "prep %.1f ms | infer %.1f ms | post %.1f ms | points %u (stride %d)",
                              prep_ms, infer_ms, pc_ms, cloud.width, s);
     }
 
@@ -504,12 +675,24 @@ private:
         message_filters::sync_policies::ExactTime<sensor_msgs::msg::Image, sensor_msgs::msg::Image>>>
         sync_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr disp_pub_;
+
+    // Output options
+    bool publish_cloud_, publish_depth_, publish_disparity_;
+    std::string cloud_topic_, depth_topic_, disparity_topic_;
+
+    // QoS params
+    std::string sub_rel_, sub_dur_, sub_hist_;
+    int sub_depth_{5};
+    std::string pub_rel_, pub_dur_, pub_hist_;
+    int pub_depth_{5};
 };
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<FoundationStereoPointsNode>());
+    rclcpp::spin(std::make_shared<FoundationStereoMatcherNode>());
     rclcpp::shutdown();
     return 0;
 }

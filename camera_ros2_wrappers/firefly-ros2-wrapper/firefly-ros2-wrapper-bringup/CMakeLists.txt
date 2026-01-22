@@ -46,6 +46,11 @@ ament_target_dependencies(depth_cleaner_node
 add_executable(qos_republisher_node src/qos_republisher_node.cpp)
 ament_target_dependencies(qos_republisher_node rclcpp)
 
+add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node.cpp)
+ament_target_dependencies(stereo_rectify_scale_node
+  rclcpp sensor_msgs cv_bridge message_filters OpenCV
+)
+
 # ------------------------
 # TensorRT + CUDA (NEW)
 # ------------------------
@@ -103,44 +108,44 @@ if(TENSORRT_INCLUDE_DIR AND TENSORRT_LIB AND TENSORRT_PLUGIN_LIB AND CUDART_LIB)
 endif()
 
 if(HAVE_TRT)
-  message(STATUS "TensorRT found. Building foundation_stereo_points_node")
+  message(STATUS "TensorRT found. Building foundation_stereo_matcher_node")
   message(STATUS "  TENSORRT_INCLUDE_DIR: ${TENSORRT_INCLUDE_DIR}")
   message(STATUS "  TENSORRT_LIB:         ${TENSORRT_LIB}")
   message(STATUS "  TENSORRT_PLUGIN_LIB:  ${TENSORRT_PLUGIN_LIB}")
   message(STATUS "  CUDART_LIB:           ${CUDART_LIB}")
 
-  add_executable(foundation_stereo_points_node src/foundation_stereo_points_node.cpp)
+  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node.cpp)
 
   # Good defaults for performance
-  target_compile_features(foundation_stereo_points_node PUBLIC cxx_std_17)
+  target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
 
   # Ensure the runtime can locate TensorRT libs without extra env vars
-  set_target_properties(foundation_stereo_points_node PROPERTIES
+  set_target_properties(foundation_stereo_matcher_node PROPERTIES
     BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
     INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
   )
 
-  target_include_directories(foundation_stereo_points_node PRIVATE
+  target_include_directories(foundation_stereo_matcher_node PRIVATE
     ${TENSORRT_INCLUDE_DIR}
   )
 
   # If you use any CUDA runtime headers directly, this helps when CUDAToolkit is found
   if(CUDAToolkit_FOUND)
-    target_include_directories(foundation_stereo_points_node PRIVATE
+    target_include_directories(foundation_stereo_matcher_node PRIVATE
       ${CUDAToolkit_INCLUDE_DIRS}
     )
   endif()
 
   # Link order matters sometimes with TRT plugins
   if(CUDAToolkit_FOUND)
-    target_link_libraries(foundation_stereo_points_node
+    target_link_libraries(foundation_stereo_matcher_node
       ${OpenCV_LIBS}
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
       CUDA::cudart
     )
   else()
-    target_link_libraries(foundation_stereo_points_node
+    target_link_libraries(foundation_stereo_matcher_node
       ${OpenCV_LIBS}
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
@@ -148,7 +153,7 @@ if(HAVE_TRT)
     )
   endif()
 
-  ament_target_dependencies(foundation_stereo_points_node
+  ament_target_dependencies(foundation_stereo_matcher_node
     rclcpp
     sensor_msgs
     cv_bridge
@@ -158,7 +163,7 @@ if(HAVE_TRT)
 
 else()
   message(WARNING
-    "TensorRT/CUDA not found. Skipping build of foundation_stereo_points_node.\n"
+    "TensorRT/CUDA not found. Skipping build of foundation_stereo_matcher_node.\n"
     "Need NvInfer.h + libnvinfer + libnvinfer_plugin + cudart."
   )
 endif()
@@ -172,12 +177,13 @@ install(TARGETS
   flash_simulator_node
   depth_cleaner_node
   qos_republisher_node
+  stereo_rectify_scale_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
 if(HAVE_TRT)
   install(TARGETS
-    foundation_stereo_points_node
+    foundation_stereo_matcher_node
     DESTINATION lib/${PROJECT_NAME}
   )
 endif()

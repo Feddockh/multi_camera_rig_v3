@@ -1,27 +1,28 @@
 import os
+
 from launch import LaunchDescription
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
-from launch.actions import OpaqueFunction
+from launch.actions import OpaqueFunction, IncludeLaunchDescription
 from launch.substitutions import PathJoinSubstitution as PJoin
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import DeclareLaunchArgument as LaunchArg
-from launch.substitutions import LaunchConfiguration as LaunchConfig
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 import yaml
+from ament_index_python.packages import get_package_share_directory
 
 
 def launch_setup(context, *args, **kwargs):
 
-    # Get the calibration directory for all cameras
-    calib_dir = LaunchConfig('calib_dir').perform(context)
-
     # Load in the Spinnaker camera configuration
-    spinnaker_config_file = LaunchConfig('spinnaker_config_file').perform(context)
-    spinnaker_param_file = LaunchConfig('spinnaker_param_file').perform(context)
+    spinnaker_config_file = LaunchConfiguration('spinnaker_config_file').perform(context)
+    spinnaker_param_file = LaunchConfiguration('spinnaker_param_file').perform(context)
     with open(spinnaker_config_file, 'r') as f:
         spinnaker_config = yaml.safe_load(f)
 
     # Adjust the paths in the configuration
+    calib_dir = LaunchConfiguration('calib_dir').perform(context)
     camera_names = spinnaker_config['cameras']
     for cam in camera_names:
         spinnaker_config[cam]['parameter_file'] = spinnaker_param_file
@@ -42,6 +43,7 @@ def launch_setup(context, *args, **kwargs):
                 parameters=[spinnaker_config],
                 extra_arguments=[{'use_intra_process_comms': True}],
                 remappings=[
+                    # Left camera
                     ('~/firefly_left/camera_info', '/firefly_left/camera_info'),
                     ('~/firefly_left/image_raw', '/firefly_left/image_raw'),
                     ('~/firefly_left/image_raw/compressed', '/firefly_left/image_raw/compressed'),
@@ -49,7 +51,7 @@ def launch_setup(context, *args, **kwargs):
                     ('~/firefly_left/image_raw/ffmpeg', '/firefly_left/image_raw/ffmpeg'),
                     ('~/firefly_left/image_raw/theora', '/firefly_left/image_raw/theora'),
                     ('~/firefly_left/meta', '/firefly_left/meta'),
-
+                    # Right camera
                     ('~/firefly_right/camera_info', '/firefly_right/camera_info'),
                     ('~/firefly_right/image_raw', '/firefly_right/image_raw'),
                     ('~/firefly_right/image_raw/compressed', '/firefly_right/image_raw/compressed'),
@@ -63,11 +65,11 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
         arguments=['--ros-args', '--log-level', 'warn'],  # Adjust log level as needed
     )
-    nodes = [spinnaker_sync_container]
-    # Current delay is about 0.03 seconds to get the images
+    launch_nodes = [spinnaker_sync_container]
+    # Current delay is about 0.02 seconds to get the images
     
     # Add trigger node if enabled
-    enable_trigger = LaunchConfig('enable_trigger').perform(context).lower() == 'true'
+    enable_trigger = LaunchConfiguration('enable_trigger').perform(context).lower() == 'true'
     if enable_trigger:
         trigger_node = Node(
             package='multi_camera_rig_trigger',
@@ -75,70 +77,52 @@ def launch_setup(context, *args, **kwargs):
             name='trigger_node',
             output='screen',
             parameters=[{
-                'serial_port': LaunchConfig('trigger_serial_port'),
-                'baudrate': LaunchConfig('trigger_baudrate'),
-                'flash_duration_ms': LaunchConfig('trigger_flash_duration_ms'),
-                'frame_rate_hz': LaunchConfig('trigger_frame_rate_hz'),
-                'auto_connect': LaunchConfig('trigger_auto_connect'),
-                'auto_start': LaunchConfig('trigger_auto_start'),
+                'serial_port': LaunchConfiguration('trigger_serial_port'),
+                'baudrate': LaunchConfiguration('trigger_baudrate'),
+                'flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
+                'frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
+                'auto_connect': LaunchConfiguration('trigger_auto_connect'),
+                'auto_start': LaunchConfiguration('trigger_auto_start'),
             }]
         )
-        nodes.append(trigger_node)
+        launch_nodes.append(trigger_node)
     
-    # Add rectification nodes for each camera
-    enable_rectification = LaunchConfig('enable_rectification').perform(context).lower() == 'true'
+    # Add rectification and scaling nodes for each camera
+    enable_rectification = LaunchConfiguration('enable_rectification').perform(context).lower() == 'true'
     if enable_rectification:
-
-        # QoS republishers: RELIABLE (camera driver) -> BEST_EFFORT
-        qos_repub_nodes = []
-        for cam in camera_names:
-            for msg_type, suffix in [
-                ('sensor_msgs/msg/Image', 'image_raw'),
-                ('sensor_msgs/msg/CameraInfo', 'camera_info'),
-            ]:
-                qos_repub_nodes.append(
-                    Node(
-                        package='firefly-ros2-wrapper-bringup',
-                        executable='qos_republisher_node',
-                        name=f'qos_repub_{cam}_{suffix}',
-                        output='screen',
-                        parameters=[{
-                            'type': msg_type,
-                            'in_topic': f'/{cam}/{suffix}',
-                            'out_topic': f'/{cam}/{suffix}_be',
-
-                            # subscription QoS (match camera driver)
-                            'sub_qos.reliability': 'reliable',
-                            'sub_qos.history': 'keep_last',
-                            'sub_qos.depth': 5,
-
-                            # publish QoS (match image_proc / sensor pipeline)
-                            'pub_qos.reliability': 'best_effort',
-                            'pub_qos.history': 'keep_last',
-                            'pub_qos.depth': 5,
-                        }]
-                    )
-                )
-        nodes.extend(qos_repub_nodes)
-        # Delay to about 0.05 seconds now
-
+        # Stereo rectify + scale nodes (replaces QoS republisher + image_proc rectify)
+        output_width = int(LaunchConfiguration('output_width').perform(context))
+        output_height = int(LaunchConfiguration('output_height').perform(context))
+        
         for cam_name in camera_names:
-            rectify_node = Node(
-                package='image_proc',
-                executable='rectify_node',
-                name=f'{cam_name}_rectify',
-                namespace=cam_name,
-                remappings=[
-                    ('image', 'image_raw_be'),
-                    ('camera_info', 'camera_info_be'),
-                    ('image_rect', 'image_rect'),
-                ],
+            rectify_scale_node = Node(
+                package='firefly-ros2-wrapper-bringup',
+                executable='stereo_rectify_scale_node',
+                name=f'{cam_name}_rectify_scale',
+                output='screen',
+                parameters=[{
+                    # Topics
+                    'in_image_topic': f'/{cam_name}/image_raw',
+                    'in_info_topic': f'/{cam_name}/camera_info',
+                    'out_image_topic': f'/{cam_name}/image_rect_scaled',
+                    'out_info_topic': f'/{cam_name}/camera_info_rect_scaled',
+                    # Scale settings
+                    'output_width': output_width,
+                    'output_height': output_height,
+                    'interpolation': 'linear',
+                    # Subscriber QoS
+                    'sub_qos.reliability': 'reliable',
+                    'sub_qos.depth': 5,
+                    # Publisher QoS
+                    'pub_qos.reliability': 'best_effort',
+                    'pub_qos.depth': 5,
+                }]
             )
-            nodes.append(rectify_node)
-        # Current delay up to this point is about 0.06 seconds
+            launch_nodes.append(rectify_scale_node)
+            # Added delay here is about 0.02 seconds
         
         # # Add disparity computation node for the stereo pair
-        # enable_disparity = LaunchConfig('enable_disparity').perform(context).lower() == 'true'
+        # enable_disparity = LaunchConfiguration('enable_disparity').perform(context).lower() == 'true'
         # if enable_disparity and enable_rectification:
         #     custom_disparity_node = Node(
         #         package='firefly-ros2-wrapper-bringup',
@@ -157,99 +141,219 @@ def launch_setup(context, *args, **kwargs):
         #     nodes.append(custom_disparity_node)
 
         # Add foundation stereo point cloud node
-        enable_point_cloud = LaunchConfig('enable_point_cloud').perform(context).lower() == 'true'
+        enable_point_cloud = LaunchConfiguration('enable_point_cloud').perform(context).lower() == 'true'
         if enable_point_cloud:
-            model_dir = LaunchConfig('model_dir').perform(context)
-            model = LaunchConfig('tensorrt_file').perform(context)
+            model_dir = LaunchConfiguration('model_dir').perform(context)
+            model = LaunchConfiguration('tensorrt_file').perform(context)
             engine_path = os.path.join(model_dir, model)
+            
             foundation_point_cloud_node = Node(
                 package='firefly-ros2-wrapper-bringup',
-                executable='foundation_stereo_points_node',
-                name='foundation_stereo_points_node',
+                executable='foundation_stereo_matcher_node',
+                name='foundation_stereo_matcher_node',
                 parameters=[
+                    # TensorRT engine
                     {'engine_path': engine_path},
-                    {'baseline': 0.06},
-                    {'stride': 2},
-                    {'max_range_m': 3.0},
+                    
+                    # Stereo parameters
+                    {'baseline': float(LaunchConfiguration('baseline').perform(context))},
+                    
+                    # Point cloud generation
+                    {'stride': int(LaunchConfiguration('stride').perform(context))},
+                    {'max_range_m': float(LaunchConfiguration('max_range_m').perform(context))},
+                    
+                    # Input topics
+                    {'left_image_topic': '/firefly_left/image_rect_scaled'},
+                    {'right_image_topic': '/firefly_right/image_rect_scaled'},
+                    {'left_info_topic': '/firefly_left/camera_info_rect_scaled'},
+                    
+                    # Output control
+                    {'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true'},
+                    {'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true'},
+                    {'publish_disparity': LaunchConfiguration('publish_disparity').perform(context).lower() == 'true'},
+                    
+                    # Output topics
+                    {'cloud_topic': LaunchConfiguration('cloud_topic').perform(context)},
+                    {'depth_topic': LaunchConfiguration('depth_topic').perform(context)},
+                    {'disparity_topic': LaunchConfiguration('disparity_topic').perform(context)},
+                    
+                    # Subscriber QoS settings
+                    {'sub_qos.reliability': 'best_effort'},
+                    {'sub_qos.durability': 'volatile'},
+                    {'sub_qos.history': 'keep_last'},
+                    {'sub_qos.depth': 5},
+                    
+                    # Publisher QoS settings
+                    {'pub_qos.reliability': 'best_effort'},
+                    {'pub_qos.durability': 'volatile'},
+                    {'pub_qos.history': 'keep_last'},
+                    {'pub_qos.depth': 5},
                 ],
                 output='screen'
             )
-            nodes.append(foundation_point_cloud_node)
-            # Delay here is about 0.16 seconds
+            launch_nodes.append(foundation_point_cloud_node)
+            # Delay here is about 0.14 seconds
 
-    return nodes
+    use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
+    if use_rviz_value.lower() == 'true':
+        # Include the firefly description launch file
+        firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')
+        description_launch_file = os.path.join(firefly_description_pkg, 'launch', 'description.launch.py')
+        
+        description_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(description_launch_file),
+            launch_arguments={
+                'use_sim_time': 'false',
+                'use_rviz': 'false',
+            }.items()
+        )
+        launch_nodes.append(description_launch)
+        # Use our own RViz config
+        firefly_bringup_pkg = get_package_share_directory('firefly-ros2-wrapper-bringup')
+        rviz_config_file = PJoin([firefly_bringup_pkg, 'rviz', 'view.rviz'])
+        rviz_node = Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', rviz_config_file],
+            parameters=[{'use_sim_time': True}],
+            output='screen'
+        )
+        launch_nodes.append(rviz_node)
+
+    return launch_nodes
 
 def generate_launch_description():
     return LaunchDescription([
-        LaunchArg(
+        DeclareLaunchArgument(
             'calib_dir',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'calibs']),
             description='Directory containing camera calibration YAML files',
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'spinnaker_config_file',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'configs', 'firefly.yaml']),
             description='Path to the Spinnaker camera configuration YAML file.',
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'spinnaker_param_file',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'params', 'firefly.yaml']),
             description='Path to the Spinnaker camera parameter definitions YAML file.',
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'enable_trigger',
             default_value='true',
             description='Enable hardware trigger node'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_serial_port',
             default_value='/dev/ttyUSB0',
-            description='Serial port for trigger hardware'
+            description='Serial port for trigger connection'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_baudrate',
             default_value='9600',
-            description='Trigger serial baudrate'
+            description='Baudrate for trigger serial connection'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_flash_duration_ms',
-            default_value='100',
+            default_value='200',
             description='Flash duration in milliseconds (0-300)'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_frame_rate_hz',
             default_value='5',
             description='Trigger frame rate in Hz (1-20)'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_auto_connect',
             default_value='true',
             description='Automatically test trigger connection on startup'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'trigger_auto_start',
             default_value='true',
             description='Automatically start video triggering on launch'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'enable_rectification',
             default_value='true',
             description='Enable image rectification nodes for each camera'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
+            'output_width',
+            default_value='448',
+            description='Output width for rectified and scaled images'
+        ),
+        DeclareLaunchArgument(
+            'output_height',
+            default_value='224',
+            description='Output height for rectified and scaled images'
+        ),
+        DeclareLaunchArgument(
             'enable_point_cloud',
             default_value='true',
             description='Enable point cloud computation node for the stereo pair'
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
+            'baseline',
+            default_value='0.06',
+            description='Stereo baseline in meters'
+        ),
+        DeclareLaunchArgument(
+            'stride',
+            default_value='1',
+            description='Point cloud stride (1=full resolution, 2=quarter points, 4=1/16 points)'
+        ),
+        DeclareLaunchArgument(
+            'max_range_m',
+            default_value='3.0',
+            description='Maximum range for point cloud generation in meters'
+        ),
+        DeclareLaunchArgument(
             'model_dir',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'models']),
             description='Directory containing TensorRT engine (.plan) files',
         ),
-        LaunchArg(
+        DeclareLaunchArgument(
             'tensorrt_file',
-            default_value='fs_448x672_vit-small_iters5.plan',
-            description='TensorRT engine file for the foundation stereo model',
+            default_value='fs_224x448_vit-small_iters5.plan',
+            description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
+        ),
+        DeclareLaunchArgument(
+            'publish_cloud',
+            default_value='true',
+            description='Publish point cloud output'
+        ),
+        DeclareLaunchArgument(
+            'publish_depth',
+            default_value='true',
+            description='Publish depth image output'
+        ),
+        DeclareLaunchArgument(
+            'publish_disparity',
+            default_value='true',
+            description='Publish disparity image output'
+        ),
+        DeclareLaunchArgument(
+            'cloud_topic',
+            default_value='/firefly_left/points2',
+            description='Topic name for point cloud output'
+        ),
+        DeclareLaunchArgument(
+            'depth_topic',
+            default_value='/firefly_left/depth',
+            description='Topic name for depth image output'
+        ),
+        DeclareLaunchArgument(
+            'disparity_topic',
+            default_value='/firefly_left/disparity',
+            description='Topic name for disparity image output'
+        ),
+        DeclareLaunchArgument(
+            'use_rviz',
+            default_value='false',
+            description='Launch RViz2 to visualize camera and point cloud data'
         ),
         OpaqueFunction(function=launch_setup)
     ])
