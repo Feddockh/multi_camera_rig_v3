@@ -4,7 +4,6 @@ import os
 import sys
 import cv2
 import numpy as np
-import torch
 import tensorrt as trt
 import time
 
@@ -28,6 +27,7 @@ try:
 except ImportError as e:
     tensorrt_engine, downscale_image = None, None
     print(f"Warning: Could not import from FoundationStereo.scripts: {e}")
+    print(f"External directory:{external_dir}")
 
 
 def make_divisible(dimension, n):
@@ -58,7 +58,7 @@ class FoundationStereoNode(Node):
         self.declare_parameter('width', 1440)
         self.declare_parameter('focal_length', 858.0)
         self.declare_parameter('baseline', 0.06)
-        self.declare_parameter('scale_factor', 0.3)  # Approximate scale factor for input images
+        self.declare_parameter('scale_factor', 0.6)  # Approximate scale factor for input images
         self.declare_parameter('vit_size', "small")  # Model sizes: [small, large]
 
         self.focal_length = float(self.get_parameter('focal_length').value)
@@ -114,9 +114,9 @@ class FoundationStereoNode(Node):
         
         # Create synchronized subscribers
         self.left_image_sub = message_filters.Subscriber(
-            self, Image, '/firefly_left/image_rect_mono')
+            self, Image, '/firefly_left/image_rect')
         self.right_image_sub = message_filters.Subscriber(
-            self, Image, '/firefly_right/image_rect_mono')
+            self, Image, '/firefly_right/image_rect')
         
         # Synchronize messages
         self.ts = message_filters.ApproximateTimeSynchronizer(
@@ -148,19 +148,30 @@ class FoundationStereoNode(Node):
             return None
     
     def preprocess_image(self, cv_image):
-        # resize if needed first (OpenCV is fast)
-        if self.scale_h != 1.0 or self.scale_w != 1.0:
-            cv_image = cv2.resize(cv_image, (self.final_width, self.final_height), interpolation=cv2.INTER_AREA)
-
-        # ensure 3 channels
+        """Preprocess image to match TensorRT model input format"""
+        # Ensure 3 channels
         if cv_image.ndim == 2:
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
-
-        chw = cv_image.transpose(2, 0, 1)                       # (3,H,W)
-        chw = np.ascontiguousarray(chw, dtype=np.float32)       # contiguous, float32
-        # if your .plan expects [0,1] input, uncomment:
-        # chw *= (1.0/255.0)
-        return chw[np.newaxis, ...]                              # (1,3,H,W)
+        
+        # Resize if needed
+        if self.scale_h != 1.0 or self.scale_w != 1.0:
+            img_resized = cv2.resize(
+                cv_image,
+                (self.final_width, self.final_height),
+                interpolation=cv2.INTER_LINEAR
+            )
+        else:
+            img_resized = cv_image
+        
+        # Convert to float32 (important for TensorRT)
+        img_float = img_resized.astype(np.float32)
+        
+        # Transpose to (C, H, W) and add batch dimension -> (1, C, H, W)
+        img_chw = np.transpose(img_float, (2, 0, 1))
+        img_batch = np.expand_dims(img_chw, axis=0)
+        
+        # Ensure contiguous memory layout for TensorRT
+        return np.ascontiguousarray(img_batch, dtype=np.float32)
 
     def compute_disparity(self, left_img, right_img):
         """Run model inference"""
@@ -224,15 +235,16 @@ class FoundationStereoNode(Node):
         """Process synchronized stereo pair"""
         try:
             # Convert ROS images to OpenCV
+            t_start = time.time()
             # left_cv = self.bridge.imgmsg_to_cv2(left_image, desired_encoding='bgr8')
             # right_cv = self.bridge.imgmsg_to_cv2(right_image, desired_encoding='bgr8')
             left_cv  = rosimg_to_numpy(left_image)
             right_cv = rosimg_to_numpy(right_image)
+            t0 = time.time()
 
             print(f'Left image shape: {left_cv.shape}, Right image shape: {right_cv.shape}')
             
             # Preprocess
-            t0 = time.time()
             left_img = self.preprocess_image(left_cv)
             right_img = self.preprocess_image(right_cv)
 
@@ -257,7 +269,7 @@ class FoundationStereoNode(Node):
             if self.scale_h != 1.0 or self.scale_w != 1.0:
                 disparity = self.scale_disparity(disparity, (1/self.scale_h, 1/self.scale_w))
             t3 = time.time()
-            self.get_logger().info(f"prep {(t1-t0)*1e3:.1f} ms | infer {(t2-t1)*1e3:.1f} ms | post {(t3-t2)*1e3:.1f} ms", throttle_duration_sec=0.5)
+            
             
             # Create disparity message
             disparity_msg = DisparityImage()
@@ -286,8 +298,15 @@ class FoundationStereoNode(Node):
             disparity_msg.max_disparity = float(np.max(disparity))
             disparity_msg.delta_d = 1.0
             
+            t4 = time.time()
+            
             # Publish
             self.disparity_pub.publish(disparity_msg)
+
+            self.get_logger().info(
+                f"convert {(t0-t_start)*1e3:.1f} ms | prep {(t1-t0)*1e3:.1f} ms | infer {(t2-t1)*1e3:.1f} ms | scale {(t3-t2)*1e3:.1f} ms | msg {(t4-t3)*1e3:.1f} ms", 
+                throttle_duration_sec=0.5
+            )
             
         except Exception as e:
             self.get_logger().error(f'Error processing stereo images: {str(e)}')
