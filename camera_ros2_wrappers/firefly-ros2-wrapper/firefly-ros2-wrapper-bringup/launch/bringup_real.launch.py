@@ -154,45 +154,71 @@ def launch_setup(context, *args, **kwargs):
                 parameters=[
                     # TensorRT engine
                     {'engine_path': engine_path},
-                    
                     # Stereo parameters
                     {'baseline': float(LaunchConfiguration('baseline').perform(context))},
-                    
                     # Point cloud generation
                     {'stride': int(LaunchConfiguration('stride').perform(context))},
                     {'max_range_m': float(LaunchConfiguration('max_range_m').perform(context))},
-                    
                     # Input topics
                     {'left_image_topic': '/firefly_left/image_rect_scaled'},
                     {'right_image_topic': '/firefly_right/image_rect_scaled'},
                     {'left_info_topic': '/firefly_left/camera_info_rect_scaled'},
-                    
                     # Output control
                     {'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true'},
                     {'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true'},
                     {'publish_disparity': LaunchConfiguration('publish_disparity').perform(context).lower() == 'true'},
-                    
                     # Output topics
                     {'cloud_topic': LaunchConfiguration('cloud_topic').perform(context)},
                     {'depth_topic': LaunchConfiguration('depth_topic').perform(context)},
                     {'disparity_topic': LaunchConfiguration('disparity_topic').perform(context)},
-                    
                     # Subscriber QoS settings
                     {'sub_qos.reliability': 'best_effort'},
                     {'sub_qos.durability': 'volatile'},
                     {'sub_qos.history': 'keep_last'},
                     {'sub_qos.depth': 5},
-                    
                     # Publisher QoS settings
                     {'pub_qos.reliability': 'best_effort'},
                     {'pub_qos.durability': 'volatile'},
                     {'pub_qos.history': 'keep_last'},
                     {'pub_qos.depth': 5},
+                    ### Filter modes (sample configuration - speckle seems to work best)
+                    ### Disparity filter: none | median | bilateral | speckle | edge_flying_kill
+                    {'disp_filter.mode': 'speckle'},
+                    # median params
+                    {'disp_filter.median_ksize': 5},
+                    # bilateral params
+                    {'disp_filter.bilateral_d': 7},
+                    {'disp_filter.bilateral_sigma_color': 3.0},
+                    {'disp_filter.bilateral_sigma_space': 7.0},
+                    # speckle params
+                    {'disp_filter.speckle_max_size': 120},
+                    {'disp_filter.speckle_range': 1.0},
+                    {'disp_filter.speckle_scale': 16.0},
+                    # edge_flying_kill params
+                    {'disp_filter.edge_ksize': 5},
+                    {'disp_filter.edge_tau': 0.20},
+                    {'disp_filter.edge_min_neighbors': 6},
+                    ### Depth filter: none | flying_pixel | median
+                    {'depth_filter.mode': 'none'},
+                    # flying_pixel params
+                    {'depth_filter.flying_ksize': 5},
+                    {'depth_filter.flying_tau': 0.25},
+                    {'depth_filter.flying_min_neighbors': 6},
+                    # median params
+                    {'depth_filter.median_ksize': 5},
+                    ### Point cloud filter: none | grid_outlier | knn_outlier
+                    {'pc_filter.mode': 'none'},
+                    # grid_outlier params
+                    {'pc_filter.grid_ksize': 5},
+                    {'pc_filter.grid_tau': 0.25},
+                    {'pc_filter.grid_min_neighbors': 4},
+                    # knn_outlier params
+                    {'pc_filter.knn_k': 20},
+                    {'pc_filter.knn_stddev_multiplier': 2.0},
                 ],
                 output='screen'
             )
             launch_nodes.append(foundation_point_cloud_node)
-            # Delay here is about 0.14 seconds
 
     use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
     if use_rviz_value.lower() == 'true':
