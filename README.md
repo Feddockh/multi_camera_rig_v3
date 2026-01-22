@@ -126,6 +126,19 @@ python scripts/run_demo.py \
 
 Tested on NVIDIA GPUs: 3090, 4090, A100, V100, Jetson Orin. Ensure you have sufficient GPU memory for your chosen model.
 
+### TensorRT Integration for ROS2
+
+For production use with ROS2, you'll want to convert the FoundationStereo model to TensorRT for optimized inference. This is especially important for real-time stereo matching applications.
+
+**See the detailed TensorRT setup guide:**
+- [`camera_ros2_wrappers/firefly-ros2-wrapper/firefly-ros2-wrapper-bringup/tools/README.md`](camera_ros2_wrappers/firefly-ros2-wrapper/firefly-ros2-wrapper-bringup/tools/README.md)
+
+This guide covers:
+- Hardware requirements for TensorRT conversion
+- ONNX export configuration
+- TensorRT conversion for ROS2 integration
+- Running the optimized model with the Firefly stereo camera node
+
 ## Building
 
 Build the packages using colcon:
