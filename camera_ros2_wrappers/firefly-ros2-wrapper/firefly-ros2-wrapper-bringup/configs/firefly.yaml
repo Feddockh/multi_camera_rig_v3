@@ -15,7 +15,7 @@ firefly_left:
   exposure_controller_name: firefly_left.exposure_controller
   serial_number: '21039765'
   camerainfo_url: '__camerainfo_url__' # Updated later
-  frame_id: firefly_left
+  frame_id: firefly_left_camera_optical_frame
   debug: false
   quiet: true
   compute_brightness: false # Doesn't work with RGB8Packed
@@ -91,7 +91,7 @@ firefly_right:
   exposure_controller_name: firefly_right.exposure_controller
   serial_number: '21081518'
   camerainfo_url: '__camerainfo_url__' # Updated later
-  frame_id: firefly_right
+  frame_id: firefly_right_camera_optical_frame
   debug: false
   quiet: true
   compute_brightness: false # Doesn't work with RGB8Packed
