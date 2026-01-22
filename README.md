@@ -68,23 +68,7 @@ FoundationStereo is a zero-shot stereo matching foundation model that provides r
 
 ### Conda Environment Setup
 
-The FoundationStereo model requires its own conda environment with specific dependencies. Follow these steps to set it up:
-
-1. **Create the conda environment** from the provided environment file:
-   ```bash
-   cd external/FoundationStereo
-   conda env create -f environment.yml
-   ```
-
-2. **Install flash-attn separately** (required to avoid environment creation errors):
-   ```bash
-   conda run -n foundation_stereo pip install flash-attn
-   ```
-
-3. **Activate the environment**:
-   ```bash
-   conda activate foundation_stereo
-   ```
+The FoundationStereo model requires its own conda environment with specific dependencies. There is a environment.yml file within the repo which came with the FoundationStereo (Python 11), but if you want functionality with ROS2 then you may want to use the environment_ros2.yml (Python 10) in the top-level of this repository.
 
 ### Download Model Weights
 
@@ -93,38 +77,7 @@ Download one of the pre-trained models and place it in `external/FoundationStere
 - **[23-51-11](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf?usp=sharing)** (Recommended) - Best performing model, based on ViT-large
 - **[11-33-40](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf?usp=sharing)** - Faster inference with slightly lower accuracy, based on ViT-small
 
-Example:
-```bash
-cd external/FoundationStereo
-mkdir -p pretrained_models
-# Download and extract the model folder (e.g., 23-51-11) into pretrained_models/
-```
-
-### Running FoundationStereo
-
-To run stereo depth estimation on a pair of images:
-
-```bash
-conda activate foundation_stereo
-cd external/FoundationStereo
-python scripts/run_demo.py \
-  --left_file ./assets/left.png \
-  --right_file ./assets/right.png \
-  --ckpt_dir ./pretrained_models/23-51-11/model_best_bp2.pth \
-  --out_dir ./test_outputs/
-```
-
-**Important Notes:**
-- Input stereo images must be **rectified and undistorted** (horizontal epipolar lines)
-- Do not swap left and right images
-- Use PNG files with no lossy compression for best results
-- Works best with RGB images, but also supports monochrome/IR stereo
-- For high-resolution images (>1000px), use `--hiera 1` for full resolution or `--scale 0.5` for faster inference
-- Specify camera intrinsics for point cloud generation (see FoundationStereo documentation)
-
-### GPU Requirements
-
-Tested on NVIDIA GPUs: 3090, 4090, A100, V100, Jetson Orin. Ensure you have sufficient GPU memory for your chosen model.
+The ViT-small model is much faster for inferencing, so I might recommend that one if you plan to try ROS implementation.
 
 ### TensorRT Integration for ROS2
 
@@ -157,16 +110,7 @@ colcon build --packages-select multi_camera_rig_description firefly-ros2-wrapper
 3. Install dependencies for each camera driver as per their respective documentation
 4. Build the workspace
 5. Source the setup file: `source install/setup.bash`
-
-### FoundationStereo (Optional)
-
-If you plan to use the FoundationStereo depth estimation:
-
-1. Set up the conda environment (see FoundationStereo Setup section)
-2. Download the pre-trained model weights
-3. Test the installation with the demo script
-
-Note: The FoundationStereo environment is separate from ROS2 and should be activated only when running stereo depth estimation tasks.
+6. If you intend to use the Foundation Stereo model for stereo matching you will need to follow the steps to set up the TensorRT model.
 
 ## License
 
