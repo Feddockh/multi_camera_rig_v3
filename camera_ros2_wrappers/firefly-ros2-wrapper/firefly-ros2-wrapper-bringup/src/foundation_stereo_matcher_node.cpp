@@ -34,7 +34,6 @@ Run with:
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 
-
 static inline void checkCuda(cudaError_t e, const char *msg)
 {
     if (e != cudaSuccess)
@@ -334,6 +333,7 @@ public:
         // Point cloud density control (very useful for CPU)
         stride_ = declare_parameter<int>("stride", 2); // 1=full model res, 2=quarter points, 4=1/16 points
         max_range_m_ = declare_parameter<double>("max_range_m", 10.0);
+        use_background_ = declare_parameter<bool>("use_background", false);
 
         // Outputs + topics
         publish_cloud_ = declare_parameter<bool>("publish_cloud", true);
@@ -553,7 +553,7 @@ private:
             // Bilateral works best when disparity is in a reasonable numeric range.
             // If disp values are large, consider scaling temporarily.
             RCLCPP_INFO_ONCE(get_logger(), "[Disparity Filter] Using bilateral filter with d=%d, sigma_color=%.1f, sigma_space=%.1f",
-                           disp_bilat_d_, disp_bilat_sc_, disp_bilat_ss_);
+                             disp_bilat_d_, disp_bilat_sc_, disp_bilat_ss_);
             cv::Mat tmp;
             disp_filt.convertTo(tmp, CV_32FC1);
             cv::bilateralFilter(tmp, disp_filt, disp_bilat_d_, disp_bilat_sc_, disp_bilat_ss_);
@@ -564,7 +564,7 @@ private:
             // We'll convert float disparity -> fixed-point, filter speckles, convert back.
             const double S = std::max(1.0, disp_speckle_scale_);
             RCLCPP_INFO_ONCE(get_logger(), "[Disparity Filter] Using speckle filter with max_size=%d, range=%.1f, scale=%.1f",
-                           disp_speckle_max_size_, disp_speckle_range_, S);
+                             disp_speckle_max_size_, disp_speckle_range_, S);
             cv::Mat disp_16s(disp_filt.size(), CV_16S);
 
             for (int v = 0; v < disp_filt.rows; ++v)
@@ -607,7 +607,7 @@ private:
             int r = k / 2;
             const double tau = std::max(0.0, disp_edge_tau_);
             RCLCPP_INFO_ONCE(get_logger(), "[Disparity Filter] Using edge_flying_kill filter with ksize=%d, tau=%.2f, min_neighbors=%d",
-                           k, tau, disp_edge_min_neigh_);
+                             k, tau, disp_edge_min_neigh_);
 
             // Precompute a median-smoothed reference (cheap robust local estimate)
             cv::Mat med;
@@ -739,7 +739,7 @@ private:
                 int r = k / 2;
                 const double tau = std::max(0.0, depth_flying_tau_);
                 RCLCPP_INFO_ONCE(get_logger(), "[Depth Filter] Using flying_pixel filter with ksize=%d, tau=%.2f, min_neighbors=%d",
-                               k, tau, depth_flying_min_neigh_);
+                                 k, tau, depth_flying_min_neigh_);
 
                 // Build a median-smoothed reference
                 cv::Mat tmp = dmat.clone();
@@ -836,7 +836,7 @@ private:
                 int r = k / 2;
                 const double tau = std::max(0.0, pc_grid_tau_);
                 RCLCPP_INFO_ONCE(get_logger(), "[PointCloud Filter] Using grid_outlier filter with ksize=%d, tau=%.2f, min_neighbors=%d",
-                               k, tau, pc_grid_min_neigh_);
+                                 k, tau, pc_grid_min_neigh_);
 
                 // Build depth image from disparity (single pass)
                 std::vector<float> zimg((size_t)out_h_ * out_w_, std::numeric_limits<float>::quiet_NaN());
@@ -947,7 +947,7 @@ private:
                 if (points.size() > (size_t)pc_knn_k_)
                 {
                     RCLCPP_INFO_ONCE(get_logger(), "[PointCloud Filter] Using knn_outlier filter with k=%d, stddev_multiplier=%.1f on %zu points",
-                                   pc_knn_k_, pc_knn_stddev_mul_, points.size());
+                                     pc_knn_k_, pc_knn_stddev_mul_, points.size());
                     // For each point, find k nearest neighbors and compute mean distance
                     std::vector<float> mean_dists(points.size());
 
@@ -1024,11 +1024,23 @@ private:
 
                     const float d = row[u];
                     if (d <= 0.0f)
+                    {
+                        if (use_background_)
+                        {
+                            n_valid++;
+                        }
                         continue;
+                    }
 
                     const double Z = fx * B / static_cast<double>(d);
                     if (Z <= 0.0 || Z > maxR)
+                    {
+                        if (use_background_)
+                        {
+                            n_valid++;
+                        }
                         continue;
+                    }
 
                     n_valid++;
                 }
@@ -1080,12 +1092,52 @@ private:
                         continue;
 
                     const float d = row[u];
-                    if (d <= 0.0f)
-                        continue;
+                    bool use_max_range = false;
 
-                    const double Z = fx * B / static_cast<double>(d);
-                    if (Z <= 0.0 || Z > maxR)
-                        continue;
+                    if (d <= 0.0f)
+                    {
+                        if (use_background_)
+                        {
+                            use_max_range = true;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
+                    double Z = 0.0;
+                    if (!use_max_range)
+                    {
+                        Z = fx * B / static_cast<double>(d);
+                        if (Z <= 0.0)
+                        {
+                            if (use_background_)
+                            {
+                                use_max_range = true;
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+                        else if (Z > maxR)
+                        {
+                            if (use_background_)
+                            {
+                                // Clamp Z to maxR (the X,Y will scale proportionally below)
+                                Z = maxR;
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                    else // Set to max range if invalid disparity
+                    {
+                        Z = maxR;
+                    }
 
                     const float X = static_cast<float>((static_cast<double>(u) - cx) * Z / fx);
                     const float Y = static_cast<float>((static_cast<double>(v) - cy) * Z / fy);
@@ -1124,6 +1176,7 @@ private:
     double baseline_{0.06};
     int stride_{2};
     double max_range_m_{10.0};
+    bool use_background_{false};
 
     // intrinsics
     bool have_info_{false};

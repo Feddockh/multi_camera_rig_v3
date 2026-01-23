@@ -159,6 +159,7 @@ def launch_setup(context, *args, **kwargs):
                     # Point cloud generation
                     {'stride': int(LaunchConfiguration('stride').perform(context))},
                     {'max_range_m': float(LaunchConfiguration('max_range_m').perform(context))},
+                    {'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true'},
                     # Input topics
                     {'left_image_topic': '/firefly_left/image_rect_scaled'},
                     {'right_image_topic': '/firefly_right/image_rect_scaled'},
@@ -333,8 +334,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'max_range_m',
-            default_value='3.0',
+            default_value='4.0',
             description='Maximum range for point cloud generation in meters'
+        ),
+        DeclareLaunchArgument(
+            'use_background',
+            default_value='true',
+            description='Create background at max range value for missing depth points'
         ),
         DeclareLaunchArgument(
             'model_dir',
@@ -353,12 +359,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'publish_depth',
-            default_value='true',
+            default_value='false',
             description='Publish depth image output'
         ),
         DeclareLaunchArgument(
             'publish_disparity',
-            default_value='true',
+            default_value='false',
             description='Publish disparity image output'
         ),
         DeclareLaunchArgument(
