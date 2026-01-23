@@ -10,40 +10,14 @@
         <!-- Left Camera Sensor -->
         <gazebo reference="firefly_left_camera_frame">
 
-            <!-- One sensor that publishes BOTH color + depth -->
-            <!-- <sensor name="firefly_left_camera" type="rgbd_camera">
-                <update_rate>20</update_rate>
-                <visualize>false</visualize>
-                <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
-                <topic>/firefly_left</topic>
-                <camera>
-                    <horizontal_fov>1.3962634</horizontal_fov>
-                    <image>
-                        <width>1440</width>
-                        <height>1080</height>
-                        <format>R8G8B8</format>
-                    </image>
-                    <clip>
-                        <near>0.01</near>
-                        <far>5.0</far>
-                    </clip>
-                    <depth_camera>
-                        <clip>
-                            <near>0.1</near>
-                            <far>10</far>
-                        </clip>
-                    </depth_camera>
-                </camera>
-            </sensor> -->
-
             <sensor name="firefly_left_depth_camera" type="depth">
-                <update_rate>20</update_rate>
+                <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/depth/image</topic>
+                <topic>/firefly_left/depth/image_sim</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_left/depth/camera_info</camera_info_topic>
                 <camera>
-                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <horizontal_fov>0.781</horizontal_fov>
                     <image>
                         <width>1440</width>
                         <height>1080</height>
@@ -57,13 +31,13 @@
             </sensor>
 
             <sensor name="firefly_left_camera" type="camera">
-                <update_rate>20</update_rate>
+                <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/image_raw</topic>
+                <topic>/firefly_left/image_raw_sim</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
                 <camera>
-                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <horizontal_fov>0.781</horizontal_fov>
                     <image>
                         <width>1440</width>
                         <height>1080</height>
@@ -87,16 +61,37 @@
 
         <!-- Right Camera Sensor -->
         <gazebo reference="firefly_right_camera_frame">
-            <sensor name="firefly_right_camera" type="camera">
-                <update_rate>20</update_rate>
+
+            <sensor name="firefly_right_depth_camera" type="depth">
+                <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_right/image_raw</topic>
+                <topic>/firefly_right/depth/image_sim</topic>
+                <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
+                <camera_info_topic>/firefly_right/depth/camera_info</camera_info_topic>
+                <camera>
+                    <horizontal_fov>0.781</horizontal_fov>
+                    <image>
+                        <width>1440</width>
+                        <height>1080</height>
+                        <format>R_FLOAT32</format>
+                    </image>
+                    <clip>
+                        <near>0.01</near>
+                        <far>5</far>
+                    </clip>
+                </camera>
+            </sensor>
+
+            <sensor name="firefly_right_camera" type="camera">
+                <update_rate>5</update_rate>
+                <visualize>false</visualize>
+                <topic>/firefly_right/image_raw_sim</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
                 <camera_info_topic>/firefly_right/camera_info</camera_info_topic>
                 <!-- Create 6cm baseline for Gazebo stereo calibration -->
                 <!-- <pose>0 0 0 0 0 0</pose>   -->
                 <camera>
-                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <horizontal_fov>0.781</horizontal_fov>
                     <image>
                         <width>1440</width>
                         <height>1080</height>
