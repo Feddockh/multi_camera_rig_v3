@@ -13,9 +13,9 @@
             <sensor name="firefly_left_depth_camera" type="depth">
                 <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/depth/image_sim</topic>
+                <topic>/firefly_left/sim/depth/image_raw</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
-                <camera_info_topic>/firefly_left/depth/camera_info</camera_info_topic>
+                <!-- <camera_info_topic>/firefly_left/depth/camera_info_sim</camera_info_topic> -->
                 <camera>
                     <horizontal_fov>0.781</horizontal_fov>
                     <image>
@@ -33,9 +33,9 @@
             <sensor name="firefly_left_camera" type="camera">
                 <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_left/image_raw_sim</topic>
+                <topic>/firefly_left/sim/image_raw</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
-                <camera_info_topic>/firefly_left/camera_info</camera_info_topic>
+                <!-- <camera_info_topic>/firefly_left/camera_info_sim</camera_info_topic> -->
                 <camera>
                     <horizontal_fov>0.781</horizontal_fov>
                     <image>
@@ -65,9 +65,9 @@
             <sensor name="firefly_right_depth_camera" type="depth">
                 <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_right/depth/image_sim</topic>
+                <topic>/firefly_right/sim/depth/image_raw</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
-                <camera_info_topic>/firefly_right/depth/camera_info</camera_info_topic>
+                <!-- <camera_info_topic>/firefly_right/depth/camera_info_sim</camera_info_topic> -->
                 <camera>
                     <horizontal_fov>0.781</horizontal_fov>
                     <image>
@@ -85,9 +85,9 @@
             <sensor name="firefly_right_camera" type="camera">
                 <update_rate>5</update_rate>
                 <visualize>false</visualize>
-                <topic>/firefly_right/image_raw_sim</topic>
+                <topic>/firefly_right/sim/image_raw</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
-                <camera_info_topic>/firefly_right/camera_info</camera_info_topic>
+                <!-- <camera_info_topic>/firefly_right/camera_info_sim</camera_info_topic> -->
                 <!-- Create 6cm baseline for Gazebo stereo calibration -->
                 <!-- <pose>0 0 0 0 0 0</pose>   -->
                 <camera>

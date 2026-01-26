@@ -33,12 +33,14 @@ def launch_setup(context, *args, **kwargs):
         executable='parameter_bridge',
         name='firefly_depth_bridge',
         arguments=[
-            '/firefly_left/image_raw_sim@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/firefly_left/depth/image_sim@sensor_msgs/msg/Image[gz.msgs.Image', # Needed for flash simulator
-            '/firefly_right/image_raw_sim@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/firefly_right/depth/image_sim@sensor_msgs/msg/Image[gz.msgs.Image', # Needed for flash simulator
-            '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-            '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_left/sim/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_right/sim/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/firefly_left/sim/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_right/sim/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_left/sim/depth/image_raw@sensor_msgs/msg/Image[gz.msgs.Image', # Needed for flash simulator
+            '/firefly_right/sim/depth/image_raw@sensor_msgs/msg/Image[gz.msgs.Image', # Needed for flash simulator
+            '/firefly_left/sim/depth/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/firefly_right/sim/depth/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
         ],
         output='screen',
         parameters=[
@@ -47,6 +49,27 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
     launch_nodes = [sensor_bridge]
+
+    # Add trigger node if enabled
+    enable_trigger = LaunchConfiguration('enable_trigger').perform(context).lower() == 'true'
+    if enable_trigger:
+        trigger_node = Node(
+            package='multi_camera_rig_trigger',
+            executable='trigger_node_fake',
+            name='trigger_node_fake',
+            output='screen',
+            parameters=[{
+                'flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
+                'frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
+                'auto_connect': LaunchConfiguration('trigger_auto_connect'),
+                'auto_start': LaunchConfiguration('trigger_auto_start'),
+                'image_sub_topics': ['/firefly_left/sim/image_raw', '/firefly_right/sim/image_raw', '/firefly_left/sim/depth/image_raw', '/firefly_right/sim/depth/image_raw'],
+                'info_sub_topics': ['/firefly_left/sim/camera_info', '/firefly_right/sim/camera_info', '/firefly_left/sim/depth/camera_info', '/firefly_right/sim/depth/camera_info'],
+                'image_pub_topics': ['/firefly_left/image_raw/triggered', '/firefly_right/image_raw/triggered', '/firefly_left/depth/image_raw/triggered', '/firefly_right/depth/image_raw/triggered'],
+                'info_pub_topics': ['/firefly_left/camera_info', '/firefly_right/camera_info', '/firefly_left/depth/camera_info', '/firefly_right/depth/camera_info'],
+            }]
+        )
+        launch_nodes.append(trigger_node)
 
     # Flash simulator node - applies flash effect to left camera
     for cam in camera_names:
@@ -59,14 +82,14 @@ def launch_setup(context, *args, **kwargs):
                 {'flash_intensity': 2.5},        # Flash brightness multiplier
                 {'shutter_speed': 0.1},          # Base image brightness (simulates fast shutter)
                 {'max_flash_distance': 1.5},     # Maximum effective flash distance (meters)
-                {'color_topic': f'/{cam}/image_raw_sim'},
-                {'depth_topic': f'/{cam}/depth/image_sim'},
+                {'color_topic': f'/{cam}/image_raw/triggered'},
+                {'depth_topic': f'/{cam}/depth/image_raw/triggered'},
                 {'output_topic': f'/{cam}/image_raw'},
             ],
             output='screen'
         )
         launch_nodes.append(flash_node)
-    
+
     # Add rectification and scaling nodes for each camera
     enable_rectification = LaunchConfiguration('enable_rectification').perform(context).lower() == 'true'
     if enable_rectification:
@@ -191,7 +214,7 @@ def launch_setup(context, *args, **kwargs):
         description_launch = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(description_launch_file),
             launch_arguments={
-                'use_sim_time': 'false',
+                'use_sim_time': 'true',
                 'use_rviz': 'false',
             }.items()
         )
