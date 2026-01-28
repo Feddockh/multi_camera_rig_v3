@@ -29,6 +29,7 @@ def launch_setup(context, *args, **kwargs):
         spinnaker_config[cam]['camerainfo_url'] = 'file://' + calib_dir + '/' + cam + '.yaml'
 
     # FLIR Spinnaker stereo cameras in a composable container
+    launch_nodes = []
     spinnaker_sync_container = ComposableNodeContainer(
         name='spinnaker_sync_container',
         namespace='',
@@ -65,7 +66,7 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
         arguments=['--ros-args', '--log-level', 'warn'],  # Adjust log level as needed
     )
-    launch_nodes = [spinnaker_sync_container]
+    launch_nodes.append(spinnaker_sync_container)
     # Current delay is about 0.02 seconds to get the images
     
     # Add trigger node if enabled
@@ -289,7 +290,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'trigger_frame_rate_hz',
-            default_value='5',
+            default_value='1',
             description='Trigger frame rate in Hz (1-20)'
         ),
         DeclareLaunchArgument(

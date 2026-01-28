@@ -127,9 +127,9 @@ def launch_setup(context, *args, **kwargs):
         # Add foundation stereo point cloud node
         enable_point_cloud = LaunchConfiguration('enable_point_cloud').perform(context).lower() == 'true'
         if enable_point_cloud:
-            model_dir = LaunchConfiguration('model_dir').perform(context)
-            model = LaunchConfiguration('tensorrt_file').perform(context)
-            engine_path = os.path.join(model_dir, model)
+            stereo_matcher_model_dir = LaunchConfiguration('stereo_matcher_model_dir').perform(context)
+            stereo_matcher_model_trt = LaunchConfiguration('stereo_matcher_model_trt').perform(context)
+            engine_path = os.path.join(stereo_matcher_model_dir, stereo_matcher_model_trt)
             
             foundation_point_cloud_node = Node(
                 package='firefly-ros2-wrapper-bringup',
@@ -139,9 +139,9 @@ def launch_setup(context, *args, **kwargs):
                     # TensorRT engine
                     {'engine_path': engine_path},
                     # Stereo parameters
-                    {'baseline': float(LaunchConfiguration('baseline').perform(context))},
+                    {'baseline': 0.06},
                     # Point cloud generation
-                    {'stride': int(LaunchConfiguration('stride').perform(context))},
+                    {'stride': 1},
                     {'max_range_m': float(LaunchConfiguration('max_range_m').perform(context))},
                     {'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true'},
                     # Input topics
@@ -204,6 +204,47 @@ def launch_setup(context, *args, **kwargs):
                 output='screen'
             )
             launch_nodes.append(foundation_point_cloud_node)
+
+    # Add detection node
+    enable_detection = LaunchConfiguration('enable_detection').perform(context).lower() == 'true'
+    if enable_detection:
+        detection_model_dir = LaunchConfiguration('detection_model_dir').perform(context)
+        detection_model_trt = LaunchConfiguration('detection_model_trt').perform(context)
+        engine_path = os.path.join(detection_model_dir, detection_model_trt)
+        
+        yolo_node = Node(
+            package='firefly-ros2-wrapper-detection',
+            executable='yolov8_trt_node',
+            name='yolov8_trt_node',
+            output='screen',
+            parameters=[{
+                # Core
+                'engine_path': engine_path,
+                'image_topic': LaunchConfiguration('yolo_image_topic'),
+                'detections_topic': LaunchConfiguration('yolo_detections_topic'),
+                # Model input (engine expects 1088x1440)
+                'input_width': LaunchConfiguration('yolo_input_width'),
+                'input_height': LaunchConfiguration('yolo_input_height'),
+                # Postprocess
+                'conf_thresh': LaunchConfiguration('yolo_conf_thresh'),
+                'iou_thresh': LaunchConfiguration('yolo_iou_thresh'),
+                'max_det': LaunchConfiguration('yolo_max_det'),
+                # QoS subscriber
+                'sub_qos.reliability': 'reliable',
+                'sub_qos.durability': 'volatile',
+                'sub_qos.history': 'keep_last',
+                'sub_qos.depth': 5,
+                # QoS publisher
+                'pub_qos.reliability': 'best_effort',
+                'pub_qos.durability': 'volatile',
+                'pub_qos.history': 'keep_last',
+                'pub_qos.depth': 5,
+                # Debug
+                'debug': True,
+            }],
+            arguments=['--ros-args', '--log-level', 'info'],
+        )
+        launch_nodes.append(yolo_node)
 
     use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
     if use_rviz_value.lower() == 'true':
@@ -307,16 +348,6 @@ def generate_launch_description():
             description='Enable point cloud computation node for the stereo pair'
         ),
         DeclareLaunchArgument(
-            'baseline',
-            default_value='0.06',
-            description='Stereo baseline in meters'
-        ),
-        DeclareLaunchArgument(
-            'stride',
-            default_value='1',
-            description='Point cloud stride (1=full resolution, 2=quarter points, 4=1/16 points)'
-        ),
-        DeclareLaunchArgument(
             'max_range_m',
             default_value='4.0',
             description='Maximum range for point cloud generation in meters'
@@ -327,12 +358,12 @@ def generate_launch_description():
             description='Create background at max range value for missing depth points'
         ),
         DeclareLaunchArgument(
-            'model_dir',
+            'stereo_matcher_model_dir',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'models']),
             description='Directory containing TensorRT engine (.plan) files',
         ),
         DeclareLaunchArgument(
-            'tensorrt_file',
+            'stereo_matcher_model_trt',
             default_value='fs_224x448_vit-small_iters5.plan',
             description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
         ),
@@ -365,6 +396,56 @@ def generate_launch_description():
             'disparity_topic',
             default_value='/firefly_left/disparity',
             description='Topic name for disparity image output'
+        ),
+        DeclareLaunchArgument(
+            'enable_detection', 
+            default_value='true',
+            description='Enable YOLOv8 detection node'
+        ),
+        DeclareLaunchArgument(
+            'detection_model_dir',
+            default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-detection'), 'models']),
+            description='Directory containing TensorRT engine (.plan) files',
+        ),
+        DeclareLaunchArgument(
+            'detection_model_trt', 
+            default_value='best_sim.plan',
+            description='TensorRT engine file for YOLOv8 detection model',
+        ),
+        DeclareLaunchArgument(
+            'yolo_image_topic', 
+            default_value='/firefly_left/image_raw',
+            description='Input image topic for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_detections_topic', 
+            default_value='/detections',
+            description='Output detections topic for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_input_width', 
+            default_value='1440',
+            description='Input width for YOLOv8 model'
+        ),
+        DeclareLaunchArgument(
+            'yolo_input_height', 
+            default_value='1088',
+            description='Input height for YOLOv8 model'
+        ),
+        DeclareLaunchArgument(
+            'yolo_conf_thresh', 
+            default_value='0.25',
+            description='Confidence threshold for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_iou_thresh', 
+            default_value='0.45',
+            description='IOU threshold for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_max_det', 
+            default_value='300',
+            description='Maximum detections for YOLOv8'
         ),
         DeclareLaunchArgument(
             'use_rviz',
