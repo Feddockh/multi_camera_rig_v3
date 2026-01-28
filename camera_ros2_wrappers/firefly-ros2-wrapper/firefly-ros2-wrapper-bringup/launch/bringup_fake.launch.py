@@ -99,7 +99,7 @@ def launch_setup(context, *args, **kwargs):
         
         for cam_name in camera_names:
             rectify_scale_node = Node(
-                package='firefly-ros2-wrapper-bringup',
+                package='firefly-ros2-wrapper-reconstruction',
                 executable='stereo_rectify_scale_node',
                 name=f'{cam_name}_rectify_scale',
                 output='screen',
@@ -132,7 +132,7 @@ def launch_setup(context, *args, **kwargs):
             engine_path = os.path.join(stereo_matcher_model_dir, stereo_matcher_model_trt)
             
             foundation_point_cloud_node = Node(
-                package='firefly-ros2-wrapper-bringup',
+                package='firefly-ros2-wrapper-reconstruction',
                 executable='foundation_stereo_matcher_node',
                 name='foundation_stereo_matcher_node',
                 parameters=[
@@ -359,7 +359,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'stereo_matcher_model_dir',
-            default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-bringup'), 'models']),
+            default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-reconstruction'), 'models']),
             description='Directory containing TensorRT engine (.plan) files',
         ),
         DeclareLaunchArgument(
