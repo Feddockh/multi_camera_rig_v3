@@ -66,4 +66,24 @@ void Yolov8Detector::detect(const cv::Mat &bgr, std::vector<Det> &dets)
                                config_.max_det, dets);
 }
 
+void Yolov8Detector::scaleDetections(const std::vector<Det> &dets,
+                                      double scale_x, double scale_y,
+                                      std::vector<Det> &dets_scaled)
+{
+    dets_scaled.clear();
+    dets_scaled.reserve(dets.size());
+    
+    for (const auto &d : dets)
+    {
+        Det scaled;
+        scaled.cls = d.cls;
+        scaled.conf = d.conf;
+        scaled.x1 = d.x1 * scale_x;
+        scaled.y1 = d.y1 * scale_y;
+        scaled.x2 = d.x2 * scale_x;
+        scaled.y2 = d.y2 * scale_y;
+        dets_scaled.push_back(scaled);
+    }
+}
+
 } // namespace firefly_detection

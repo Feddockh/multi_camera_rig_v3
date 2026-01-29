@@ -52,7 +52,7 @@ public:
         // Declare parameters
         engine_path_ = declare_parameter<std::string>("engine_path", "");
         image_topic_ = declare_parameter<std::string>("image_topic", "/camera/image_raw");
-        det_topic_ = declare_parameter<std::string>("det_topic", "/yolo/detections");
+        det_topic_ = declare_parameter<std::string>("detection_topic", "/yolo/detections");
         
         input_tensor_ = declare_parameter<std::string>("input_tensor", "images");
         output_tensor_ = declare_parameter<std::string>("output_tensor", "output0");
@@ -68,6 +68,12 @@ public:
 
         debug_ = declare_parameter<bool>("debug", false);
         debug_image_topic_ = declare_parameter<std::string>("debug_image_topic", "/yolo/debug_image");
+
+        // Scale output parameters
+        scale_output_ = declare_parameter<bool>("scale_output", false);
+        output_width_ = declare_parameter<int>("output_width", 896);
+        output_height_ = declare_parameter<int>("output_height", 672);
+        det_topic_scaled_ = declare_parameter<std::string>("detection_topic_scaled", "/yolo/detections_scaled");
 
         // QoS params
         sub_rel_ = declare_parameter<std::string>("sub_qos.reliability", "best_effort");
@@ -105,6 +111,12 @@ public:
 
         // Publishers
         pub_ = create_publisher<vision_msgs::msg::Detection2DArray>(det_topic_, pub_qos);
+        if (scale_output_)
+        {
+            pub_scaled_ = create_publisher<vision_msgs::msg::Detection2DArray>(det_topic_scaled_, pub_qos);
+            RCLCPP_INFO(get_logger(), "Scaled detection publishing enabled: %s (scale to %dx%d)",
+                        det_topic_scaled_.c_str(), output_width_, output_height_);
+        }
         if (debug_)
         {
             debug_img_pub_ = create_publisher<sensor_msgs::msg::Image>(debug_image_topic_, pub_qos);
@@ -212,6 +224,50 @@ private:
 
         pub_->publish(out_msg);
 
+        // Publish scaled detections if enabled
+        if (scale_output_ && pub_scaled_)
+        {
+            // Get image dimensions for scaling
+            const int orig_width = cvp->image.cols;
+            const int orig_height = cvp->image.rows;
+            const double scale_x = static_cast<double>(output_width_) / static_cast<double>(orig_width);
+            const double scale_y = static_cast<double>(output_height_) / static_cast<double>(orig_height);
+
+            // Scale detections
+            std::vector<Det> dets_scaled;
+            Yolov8Detector::scaleDetections(dets, scale_x, scale_y, dets_scaled);
+
+            // Publish scaled detections
+            vision_msgs::msg::Detection2DArray scaled_msg;
+            scaled_msg.header = msg->header;
+            scaled_msg.detections.reserve(dets_scaled.size());
+
+            for (const auto &d : dets_scaled)
+            {
+                vision_msgs::msg::Detection2D det;
+                det.header = msg->header;
+
+                const float cx = 0.5f * (d.x1 + d.x2);
+                const float cy = 0.5f * (d.y1 + d.y2);
+                const float w = (d.x2 - d.x1);
+                const float h = (d.y2 - d.y1);
+
+                det.bbox.center.position.x = cx;
+                det.bbox.center.position.y = cy;
+                det.bbox.size_x = w;
+                det.bbox.size_y = h;
+
+                vision_msgs::msg::ObjectHypothesisWithPose hyp;
+                hyp.hypothesis.class_id = std::to_string(d.cls);
+                hyp.hypothesis.score = d.conf;
+                det.results.push_back(hyp);
+
+                scaled_msg.detections.push_back(det);
+            }
+
+            pub_scaled_->publish(scaled_msg);
+        }
+
         // Publish debug annotated image if enabled
         publishDebugImage(msg, cvp->image, dets);
 
@@ -243,6 +299,12 @@ private:
     bool debug_{false};
     std::string debug_image_topic_{"/yolo/debug_image"};
 
+    // Scale output parameters
+    bool scale_output_{false};
+    int output_width_{896};
+    int output_height_{672};
+    std::string det_topic_scaled_{"/yolo/detections_scaled"};
+
     // Detector
     std::unique_ptr<Yolov8Detector> detector_;
 
@@ -255,6 +317,7 @@ private:
     // ROS
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_;
     rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr pub_;
+    rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr pub_scaled_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_img_pub_;
 };
 

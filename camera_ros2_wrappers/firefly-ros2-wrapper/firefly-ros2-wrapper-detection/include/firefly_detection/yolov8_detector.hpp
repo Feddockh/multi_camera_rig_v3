@@ -54,6 +54,17 @@ public:
     void detect(const cv::Mat &bgr, std::vector<Det> &dets);
 
     /**
+     * @brief Scale detections to a different resolution
+     * @param dets Input detections (in original resolution)
+     * @param scale_x X scale factor (output_width / input_width)
+     * @param scale_y Y scale factor (output_height / input_height)
+     * @param dets_scaled Output scaled detections
+     */
+    static void scaleDetections(const std::vector<Det> &dets,
+                                  double scale_x, double scale_y,
+                                  std::vector<Det> &dets_scaled);
+
+    /**
      * @brief Get letterbox info from last detection
      * @return Letterbox transformation info
      */

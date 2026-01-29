@@ -179,7 +179,7 @@ def launch_setup(context, *args, **kwargs):
                 # Core
                 'engine_path': engine_path,
                 'image_topic': '/firefly_left/image_rect',
-                'detections_topic': '/firefly_left/detections',
+                'detection_topic': '/firefly_left/detections',
                 # Model input (engine expects 1088x1440)
                 'input_width': LaunchConfiguration('yolo_input_width'),
                 'input_height': LaunchConfiguration('yolo_input_height'),
@@ -187,6 +187,11 @@ def launch_setup(context, *args, **kwargs):
                 'conf_thresh': LaunchConfiguration('yolo_conf_thresh'),
                 'iou_thresh': LaunchConfiguration('yolo_iou_thresh'),
                 'max_det': LaunchConfiguration('yolo_max_det'),
+                # Scale settings
+                'scale_output': True,
+                'output_width': output_width,
+                'output_height': output_height,
+                'detection_topic_scaled': '/firefly_left/detections_scaled',
                 # QoS subscriber
                 'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
@@ -222,8 +227,7 @@ def launch_setup(context, *args, **kwargs):
             'disparity_topic': '/firefly_left/disparity',
             'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
             'image_topic': '/firefly_left/image_rect_scaled',
-            'detection_topic': '/firefly_left/detections',
-            'original_camera_info_topic': '/firefly_left/camera_info',
+            'detection_topic': '/firefly_left/detections_scaled',
             # Output control
             'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true',
             'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true',

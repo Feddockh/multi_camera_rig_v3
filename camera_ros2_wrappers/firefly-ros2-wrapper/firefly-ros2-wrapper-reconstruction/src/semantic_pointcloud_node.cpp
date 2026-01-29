@@ -96,9 +96,8 @@ public:
         // Setup synchronizers based on mode
         if (config.use_semantics)
         {
-            // Semantic mode: need detections + original camera info for scaling
+            // Semantic mode: need detections (already scaled)
             std::string detection_topic = declare_parameter<std::string>("detection_topic", "/detections");
-            std::string orig_info_topic = declare_parameter<std::string>("original_camera_info_topic", "/firefly_left/camera_info");
 
             disp_sub_.subscribe(this, disparity_topic, sub_qos.get_rmw_qos_profile());
             image_sub_.subscribe(this, image_topic, sub_qos.get_rmw_qos_profile());
@@ -111,13 +110,7 @@ public:
             sync_semantic_->registerCallback(std::bind(&SemanticPointCloudNode::onSemanticCallback, this,
                                                       std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-            // Subscribe to original camera info for detection scaling
-            orig_info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-                orig_info_topic, sub_qos,
-                std::bind(&SemanticPointCloudNode::onOriginalInfo, this, std::placeholders::_1));
-
             RCLCPP_INFO(get_logger(), "  Detections: %s", detection_topic.c_str());
-            RCLCPP_INFO(get_logger(), "  Original Camera Info: %s", orig_info_topic.c_str());
         }
         else
         {
@@ -140,12 +133,6 @@ private:
         processor_->updateCameraInfo(*msg);
     }
 
-    void onOriginalInfo(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
-    {
-        orig_camera_info_ = *msg;
-        have_orig_info_ = true;
-    }
-
     void onSemanticCallback(
         const sensor_msgs::msg::Image::ConstSharedPtr &disp_msg,
         const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
@@ -163,22 +150,7 @@ private:
             return;
         }
 
-        if (!have_orig_info_)
-        {
-            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Waiting for original camera info...");
-            return;
-        }
-
         const auto t0 = now();
-
-        // Compute scale factors from original to scaled resolution
-        double scale_x = static_cast<double>(image_msg->width) / static_cast<double>(orig_camera_info_.width);
-        double scale_y = static_cast<double>(image_msg->height) / static_cast<double>(orig_camera_info_.height);
-
-        if (debug_)
-            RCLCPP_INFO(get_logger(), "Scale factors: x=%.3f (orig %d -> scaled %d), y=%.3f (orig %d -> scaled %d)",
-                       scale_x, orig_camera_info_.width, image_msg->width,
-                       scale_y, orig_camera_info_.height, image_msg->height);
 
         // Publish point cloud if requested
         if (config_.publish_cloud && cloud_pub_)
@@ -187,9 +159,10 @@ private:
                 RCLCPP_INFO(get_logger(), "Processing semantic point cloud...");
 
             sensor_msgs::msg::PointCloud2 cloud_msg;
+            // Detections are already scaled to match image resolution, so scale factors are 1.0
             bool success = processor_->processSemanticPointCloud(
                 *disp_msg, *image_msg, detection_msg->detections,
-                scale_x, scale_y, disp_msg->header, cloud_msg);
+                1.0, 1.0, disp_msg->header, cloud_msg);
 
             if (success)
             {
@@ -298,11 +271,7 @@ private:
     firefly_reconstruction::SemanticPointCloudConfig config_;
     bool debug_;
 
-    sensor_msgs::msg::CameraInfo orig_camera_info_;
-    bool have_orig_info_{false};
-
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr orig_info_sub_;
     
     message_filters::Subscriber<sensor_msgs::msg::Image> disp_sub_;
     message_filters::Subscriber<sensor_msgs::msg::Image> image_sub_;
