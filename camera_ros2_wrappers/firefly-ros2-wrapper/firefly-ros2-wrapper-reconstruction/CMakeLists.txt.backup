@@ -16,27 +16,20 @@ find_package(message_filters REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(OpenCV REQUIRED)
 
-# Include directories
-include_directories(include)
-
 # ------------------------
-# Shared libraries
+# Basic stereo rectify + scale node (no CUDA/TRT required)
 # ------------------------
-
-# StereoRectifyScale library
-add_library(stereo_rectify_scale src/stereo_rectify_scale.cpp)
-ament_target_dependencies(stereo_rectify_scale sensor_msgs OpenCV rclcpp)
-
-# SemanticPointCloud library
-add_library(semantic_pointcloud src/semantic_pointcloud.cpp)
-ament_target_dependencies(semantic_pointcloud sensor_msgs cv_bridge OpenCV rclcpp)
+add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node.cpp)
+ament_target_dependencies(stereo_rectify_scale_node
+  rclcpp sensor_msgs cv_bridge message_filters OpenCV
+)
 
 # ------------------------
 # TensorRT + CUDA (for foundation stereo)
 # ------------------------
 find_package(CUDAToolkit QUIET)
 
-# CUDA "targets" dirs
+# CUDA "targets" dirs (your ldconfig output shows libs here)
 set(CUDA_TARGETS_LIB_DIR "/usr/local/cuda/targets/x86_64-linux/lib")
 set(CUDA_TARGETS_INC_DIR "/usr/local/cuda/targets/x86_64-linux/include")
 
@@ -88,84 +81,72 @@ if(TENSORRT_INCLUDE_DIR AND TENSORRT_LIB AND TENSORRT_PLUGIN_LIB AND CUDART_LIB)
 endif()
 
 if(HAVE_TRT)
-  message(STATUS "TensorRT found. Building TensorRT-based components")
+  message(STATUS "TensorRT found. Building foundation_stereo_matcher_node")
   message(STATUS "  TENSORRT_INCLUDE_DIR: ${TENSORRT_INCLUDE_DIR}")
   message(STATUS "  TENSORRT_LIB:         ${TENSORRT_LIB}")
   message(STATUS "  TENSORRT_PLUGIN_LIB:  ${TENSORRT_PLUGIN_LIB}")
   message(STATUS "  CUDART_LIB:           ${CUDART_LIB}")
 
-  # TrtRunner library
-  add_library(trt_runner src/trt_runner.cpp)
-  target_include_directories(trt_runner PUBLIC ${TENSORRT_INCLUDE_DIR})
+  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node.cpp)
+
+  # Good defaults for performance
+  target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
+
+  # Ensure the runtime can locate TensorRT libs without extra env vars
+  set_target_properties(foundation_stereo_matcher_node PROPERTIES
+    BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
+    INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
+  )
+
+  target_include_directories(foundation_stereo_matcher_node PRIVATE
+    ${TENSORRT_INCLUDE_DIR}
+  )
+
+  # If you use any CUDA runtime headers directly, this helps when CUDAToolkit is found
   if(CUDAToolkit_FOUND)
-    target_include_directories(trt_runner PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
-    target_link_libraries(trt_runner
+    target_include_directories(foundation_stereo_matcher_node PRIVATE
+      ${CUDAToolkit_INCLUDE_DIRS}
+    )
+  endif()
+
+  # Link order matters sometimes with TRT plugins
+  if(CUDAToolkit_FOUND)
+    target_link_libraries(foundation_stereo_matcher_node
+      ${OpenCV_LIBS}
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
       CUDA::cudart
     )
   else()
-    target_link_libraries(trt_runner
+    target_link_libraries(foundation_stereo_matcher_node
+      ${OpenCV_LIBS}
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
       ${CUDART_LIB}
     )
   endif()
 
-  # FoundationStereoMatcher library
-  add_library(foundation_stereo_matcher src/foundation_stereo_matcher.cpp)
-  target_link_libraries(foundation_stereo_matcher
-    trt_runner
-    ${OpenCV_LIBS}
-  )
-  ament_target_dependencies(foundation_stereo_matcher OpenCV rclcpp)
-
-  # Foundation stereo matcher node (refactored)
-  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node_new.cpp)
-  target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
-  
-  set_target_properties(foundation_stereo_matcher_node PROPERTIES
-    BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
-    INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
-  )
-
-  target_link_libraries(foundation_stereo_matcher_node
-    foundation_stereo_matcher
-  )
   ament_target_dependencies(foundation_stereo_matcher_node
     rclcpp
     sensor_msgs
     cv_bridge
     message_filters
+    OpenCV
   )
 
 else()
   message(WARNING
-    "TensorRT/CUDA not found. Skipping TensorRT-based components.\n"
+    "TensorRT/CUDA not found. Skipping build of foundation_stereo_matcher_node.\n"
     "Need NvInfer.h + libnvinfer + libnvinfer_plugin + cudart."
   )
 endif()
 
 # ------------------------
-# Stereo rectify + scale node (refactored)
+# Semantic pointcloud node (no TRT/CUDA required)
 # ------------------------
-add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node_new.cpp)
-target_link_libraries(stereo_rectify_scale_node
-  stereo_rectify_scale
-)
-ament_target_dependencies(stereo_rectify_scale_node
-  rclcpp sensor_msgs cv_bridge OpenCV
-)
-
-# ------------------------
-# Semantic pointcloud node (refactored)
-# ------------------------
-add_executable(semantic_pointcloud_node src/semantic_pointcloud_node_new.cpp)
-target_link_libraries(semantic_pointcloud_node
-  semantic_pointcloud
-)
+add_executable(semantic_pointcloud_node src/semantic_pointcloud_node.cpp)
 ament_target_dependencies(semantic_pointcloud_node
-  rclcpp sensor_msgs message_filters
+  rclcpp sensor_msgs cv_bridge message_filters OpenCV
 )
 
 # ------------------------
@@ -187,12 +168,6 @@ endif()
 install(
   DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
-)
-
-# Install header files
-install(
-  DIRECTORY include/
-  DESTINATION include/
 )
 
 ament_package()

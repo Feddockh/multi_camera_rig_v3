@@ -369,7 +369,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'publish_cloud',
-            default_value='true',
+            default_value='false',
             description='Publish point cloud output'
         ),
         DeclareLaunchArgument(
@@ -379,7 +379,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'publish_disparity',
-            default_value='false',
+            default_value='true',
             description='Publish disparity image output'
         ),
         DeclareLaunchArgument(

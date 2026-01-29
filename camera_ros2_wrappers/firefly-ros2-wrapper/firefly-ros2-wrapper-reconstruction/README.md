@@ -2,6 +2,49 @@
 
 This package provides 3D reconstruction capabilities for the Firefly flash stereo camera system.
 
+## Architecture
+
+The package follows a **modular architecture** with separation between ROS2 integration and core processing logic:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ROS2 Node Layer                          │
+│  (Thin wrappers - parameter handling, pub/sub)             │
+├─────────────────────────────────────────────────────────────┤
+│  foundation_stereo_    stereo_rectify_    semantic_         │
+│  matcher_node          scale_node         pointcloud_node   │
+└────────┬───────────────────┬────────────────────┬───────────┘
+         │                   │                    │
+         ▼                   ▼                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Processor Libraries                        │
+│  (Core logic - testable without ROS2)                      │
+├─────────────────────────────────────────────────────────────┤
+│  FoundationStereo    StereoRectify    SemanticPointCloud   │
+│  Matcher             Scale             (TODO)               │
+└────────┬───────────────────┬────────────────────────────────┘
+         │                   │
+         ▼                   │
+┌─────────────────┐          │
+│  TrtRunner      │          │
+│  (TensorRT)     │          │
+└─────────────────┘          │
+         │                   │
+         └───────────┬───────┘
+                     ▼
+         ┌───────────────────────┐
+         │   Shared Utilities    │
+         │   - qos_utils         │
+         │   - (future common)   │
+         └───────────────────────┘
+```
+
+**Key Benefits:**
+- **Testability**: Core processors testable without ROS2
+- **Reusability**: Processors usable in non-ROS contexts
+- **Consistency**: Shared QoS utilities across all nodes
+- **Maintainability**: Clear separation of concerns
+
 ## Nodes
 
 ### 1. stereo_rectify_scale_node
