@@ -60,7 +60,7 @@ void StereoRectifyScale::scaleIntrinsics(sensor_msgs::msg::CameraInfo &ci, doubl
     ci.p[6] *= sy; // cy
 }
 
-bool StereoRectifyScale::process(const cv::Mat &input, cv::Mat &output,
+bool StereoRectifyScale::rectify(const cv::Mat &input, cv::Mat &output,
                                   sensor_msgs::msg::CameraInfo &output_camera_info)
 {
     if (!have_info_)
@@ -72,21 +72,33 @@ bool StereoRectifyScale::process(const cv::Mat &input, cv::Mat &output,
         return false;
 
     // Rectify
-    cv::Mat rectified;
-    cv::remap(input, rectified, map1_, map2_, config_.interpolation);
+    cv::remap(input, output, map1_, map2_, config_.interpolation);
 
-    // Scale
-    cv::resize(rectified, output, cv::Size(config_.output_width, config_.output_height),
-               0, 0, config_.interpolation);
-
-    // Create scaled CameraInfo
+    // Create rectified CameraInfo
     output_camera_info = last_info_;
-    output_camera_info.width = config_.output_width;
-    output_camera_info.height = config_.output_height;
+    output_camera_info.width = input.cols;
+    output_camera_info.height = input.rows;
 
     // For rectified images, D is usually zeroed and R is identity
     output_camera_info.d.assign(output_camera_info.d.size(), 0.0);
     output_camera_info.r = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+
+    return true;
+}
+
+bool StereoRectifyScale::scale(const cv::Mat &input,
+                                const sensor_msgs::msg::CameraInfo &input_camera_info,
+                                cv::Mat &output,
+                                sensor_msgs::msg::CameraInfo &output_camera_info)
+{
+    // Scale image
+    cv::resize(input, output, cv::Size(config_.output_width, config_.output_height),
+               0, 0, config_.interpolation);
+
+    // Create scaled CameraInfo
+    output_camera_info = input_camera_info;
+    output_camera_info.width = config_.output_width;
+    output_camera_info.height = config_.output_height;
 
     // Scale intrinsics from input image size -> output size
     const double sx = static_cast<double>(config_.output_width) / static_cast<double>(input.cols);
@@ -94,6 +106,19 @@ bool StereoRectifyScale::process(const cv::Mat &input, cv::Mat &output,
     scaleIntrinsics(output_camera_info, sx, sy);
 
     return true;
+}
+
+bool StereoRectifyScale::process(const cv::Mat &input, cv::Mat &output,
+                                  sensor_msgs::msg::CameraInfo &output_camera_info)
+{
+    // Rectify first
+    cv::Mat rectified;
+    sensor_msgs::msg::CameraInfo rect_info;
+    if (!rectify(input, rectified, rect_info))
+        return false;
+
+    // Then scale
+    return scale(rectified, rect_info, output, output_camera_info);
 }
 
 } // namespace firefly_reconstruction

@@ -39,7 +39,30 @@ public:
     void updateCameraInfo(const sensor_msgs::msg::CameraInfo &camera_info);
 
     /**
-     * @brief Process image: rectify and scale
+     * @brief Rectify image (undistort and rectify)
+     * @param input Input image (any encoding)
+     * @param output Output rectified image (same encoding)
+     * @param output_camera_info Output rectified camera info
+     * @return true if processing succeeded, false if calibration not ready
+     */
+    bool rectify(const cv::Mat &input, cv::Mat &output,
+                 sensor_msgs::msg::CameraInfo &output_camera_info);
+
+    /**
+     * @brief Scale image and camera info
+     * @param input Input image (typically rectified)
+     * @param input_camera_info Input camera info
+     * @param output Output scaled image (same encoding)
+     * @param output_camera_info Output scaled camera info
+     * @return true if processing succeeded
+     */
+    bool scale(const cv::Mat &input,
+               const sensor_msgs::msg::CameraInfo &input_camera_info,
+               cv::Mat &output,
+               sensor_msgs::msg::CameraInfo &output_camera_info);
+
+    /**
+     * @brief Process image: rectify and scale (convenience method)
      * @param input Input image (any encoding)
      * @param output Output rectified and scaled image (same encoding)
      * @param output_camera_info Output scaled camera info

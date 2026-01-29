@@ -102,8 +102,10 @@ def launch_setup(context, *args, **kwargs):
                 # Topics
                 'in_image_topic': f'/{cam_name}/image_raw',
                 'in_info_topic': f'/{cam_name}/camera_info',
-                'out_image_topic': f'/{cam_name}/image_rect_scaled',
-                'out_info_topic': f'/{cam_name}/camera_info_rect_scaled',
+                'out_rect_image_topic': f'/{cam_name}/image_rect',
+                'out_rect_info_topic': f'/{cam_name}/camera_info_rect',
+                'out_rect_scaled_image_topic': f'/{cam_name}/image_rect_scaled',
+                'out_rect_scaled_info_topic': f'/{cam_name}/camera_info_rect_scaled',
                 # Scale settings
                 'output_width': output_width,
                 'output_height': output_height,
@@ -139,7 +141,7 @@ def launch_setup(context, *args, **kwargs):
             'right_image_topic': '/firefly_right/image_rect_scaled',
             'left_info_topic': '/firefly_left/camera_info_rect_scaled',
             # Output topic
-            'disparity_topic': LaunchConfiguration('disparity_topic'),
+            'disparity_topic': '/firefly_left/disparity',
             # Subscriber QoS settings
             'sub_qos.reliability': 'best_effort',
             'sub_qos.durability': 'volatile',
@@ -160,53 +162,6 @@ def launch_setup(context, *args, **kwargs):
         output='screen'
     )
     launch_nodes.append(foundation_stereo_matcher_node)
-        
-    # Add semantic pointcloud node to generate point clouds from disparity
-    semantic_pointcloud_node = Node(
-        package='firefly-ros2-wrapper-reconstruction',
-        executable='semantic_pointcloud_node',
-        name='semantic_pointcloud_node',
-        parameters=[{
-            # Mode selection
-            'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
-            # Stereo parameters
-            'baseline': 0.06,
-            # Point cloud generation
-            'stride': 1,
-            'max_range_m': float(LaunchConfiguration('max_range_m').perform(context)),
-            'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
-            # Input topics
-            'disparity_topic': LaunchConfiguration('disparity_topic').perform(context),
-            'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
-            'image_topic': '/firefly_left/image_rect_scaled',
-            'detection_topic': LaunchConfiguration('yolo_detections_topic').perform(context),
-            'original_camera_info_topic': '/firefly_left/camera_info',
-            # Output control
-            'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true',
-            'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true',
-            # Output topics
-            'cloud_topic': LaunchConfiguration('cloud_topic').perform(context),
-            'depth_topic': LaunchConfiguration('depth_topic').perform(context),
-            # Semantic parameters (for semantic mode)
-            'background_class_id': -1,
-            'background_confidence': 0.5,
-            'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
-            # Subscriber QoS settings
-            'sub_qos.reliability': 'best_effort',
-            'sub_qos.durability': 'volatile',
-            'sub_qos.history': 'keep_last',
-            'sub_qos.depth': 5,
-            # Publisher QoS settings
-            'pub_qos.reliability': 'best_effort',
-            'pub_qos.durability': 'volatile',
-            'pub_qos.history': 'keep_last',
-            'pub_qos.depth': 5,
-            # Debug
-            'debug': False,
-        }],
-        output='screen'
-    )
-    launch_nodes.append(semantic_pointcloud_node)
 
     # Add detection node
     enable_detection = LaunchConfiguration('enable_detection').perform(context).lower() == 'true'
@@ -223,8 +178,8 @@ def launch_setup(context, *args, **kwargs):
             parameters=[{
                 # Core
                 'engine_path': engine_path,
-                'image_topic': LaunchConfiguration('yolo_image_topic'),
-                'detections_topic': LaunchConfiguration('yolo_detections_topic'),
+                'image_topic': '/firefly_left/image_rect',
+                'detections_topic': '/firefly_left/detections',
                 # Model input (engine expects 1088x1440)
                 'input_width': LaunchConfiguration('yolo_input_width'),
                 'input_height': LaunchConfiguration('yolo_input_height'),
@@ -248,6 +203,53 @@ def launch_setup(context, *args, **kwargs):
             arguments=['--ros-args', '--log-level', 'info'],
         )
         launch_nodes.append(yolo_node)
+
+    # Add semantic pointcloud node to generate point clouds from disparity
+    semantic_pointcloud_node = Node(
+        package='firefly-ros2-wrapper-reconstruction',
+        executable='semantic_pointcloud_node',
+        name='semantic_pointcloud_node',
+        parameters=[{
+            # Mode selection
+            'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
+            # Stereo parameters
+            'baseline': 0.06,
+            # Point cloud generation
+            'stride': 1,
+            'max_range_m': float(LaunchConfiguration('max_range_m').perform(context)),
+            'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
+            # Input topics
+            'disparity_topic': '/firefly_left/disparity',
+            'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
+            'image_topic': '/firefly_left/image_rect_scaled',
+            'detection_topic': '/firefly_left/detections',
+            'original_camera_info_topic': '/firefly_left/camera_info',
+            # Output control
+            'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true',
+            'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true',
+            # Output topics
+            'cloud_topic': "/firefly_left/points2",
+            'depth_topic': '/firefly_left/depth',
+            # Semantic parameters (for semantic mode)
+            'background_class_id': -1,
+            'background_confidence': 0.5,
+            'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
+            # Subscriber QoS settings
+            'sub_qos.reliability': 'best_effort',
+            'sub_qos.durability': 'volatile',
+            'sub_qos.history': 'keep_last',
+            'sub_qos.depth': 5,
+            # Publisher QoS settings
+            'pub_qos.reliability': 'best_effort',
+            'pub_qos.durability': 'volatile',
+            'pub_qos.history': 'keep_last',
+            'pub_qos.depth': 5,
+            # Debug
+            'debug': False,
+        }],
+        output='screen'
+    )
+    launch_nodes.append(semantic_pointcloud_node)
 
     use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
     if use_rviz_value.lower() == 'true':
@@ -342,7 +344,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_background',
-            default_value='false',
+            default_value='true',
             description='Create background at max range value for missing depth points'
         ),
         DeclareLaunchArgument(
@@ -376,26 +378,6 @@ def generate_launch_description():
             description='Publish depth image output'
         ),
         DeclareLaunchArgument(
-            'publish_disparity',
-            default_value='true',
-            description='Publish disparity image output'
-        ),
-        DeclareLaunchArgument(
-            'cloud_topic',
-            default_value='/firefly_left/points2',
-            description='Topic name for point cloud output'
-        ),
-        DeclareLaunchArgument(
-            'depth_topic',
-            default_value='/firefly_left/depth',
-            description='Topic name for depth image output'
-        ),
-        DeclareLaunchArgument(
-            'disparity_topic',
-            default_value='/firefly_left/disparity',
-            description='Topic name for disparity image output'
-        ),
-        DeclareLaunchArgument(
             'enable_detection', 
             default_value='true',
             description='Enable YOLOv8 detection node'
@@ -409,16 +391,6 @@ def generate_launch_description():
             'detection_model_trt', 
             default_value='best_sim.plan',
             description='TensorRT engine file for YOLOv8 detection model',
-        ),
-        DeclareLaunchArgument(
-            'yolo_image_topic', 
-            default_value='/firefly_left/image_raw',
-            description='Input image topic for YOLOv8 detection'
-        ),
-        DeclareLaunchArgument(
-            'yolo_detections_topic', 
-            default_value='/detections',
-            description='Output detections topic for YOLOv8 detection'
         ),
         DeclareLaunchArgument(
             'yolo_input_width', 

@@ -90,52 +90,116 @@ if(HAVE_TRT)
   message(STATUS "  TENSORRT_PLUGIN_LIB:  ${TENSORRT_PLUGIN_LIB}")
   message(STATUS "  CUDART_LIB:           ${CUDART_LIB}")
 
-  add_executable(yolov8_trt_node src/yolov8_trt_node.cpp)
-
-  # Good defaults for performance
-  target_compile_features(yolov8_trt_node PUBLIC cxx_std_17)
-
-  # Ensure the runtime can locate TensorRT libs without extra env vars
-  set_target_properties(yolov8_trt_node PROPERTIES
-    BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
-    INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
+  # ------------------------
+  # TRT Runner Library
+  # ------------------------
+  add_library(trt_runner SHARED
+    src/trt_runner.cpp
   )
 
-  target_include_directories(yolov8_trt_node PRIVATE
+  target_compile_features(trt_runner PUBLIC cxx_std_17)
+
+  target_include_directories(trt_runner PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
     ${TENSORRT_INCLUDE_DIR}
   )
 
-  # If you use any CUDA runtime headers directly, this helps when CUDAToolkit is found
   if(CUDAToolkit_FOUND)
-    target_include_directories(yolov8_trt_node PRIVATE
+    target_include_directories(trt_runner PUBLIC
       ${CUDAToolkit_INCLUDE_DIRS}
     )
-  endif()
-
-  # Link order matters sometimes with TRT plugins
-  if(CUDAToolkit_FOUND)
-    target_link_libraries(yolov8_trt_node
-      ${OpenCV_LIBS}
+    target_link_libraries(trt_runner
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
       CUDA::cudart
     )
   else()
-    target_link_libraries(yolov8_trt_node
-      ${OpenCV_LIBS}
+    target_link_libraries(trt_runner
       ${TENSORRT_LIB}
       ${TENSORRT_PLUGIN_LIB}
       ${CUDART_LIB}
     )
   endif()
 
+  set_target_properties(trt_runner PROPERTIES
+    BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
+    INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
+  )
+
+  # ------------------------
+  # Detection Utils Library
+  # ------------------------
+  add_library(detection_utils SHARED
+    src/detection_utils.cpp
+  )
+
+  target_compile_features(detection_utils PUBLIC cxx_std_17)
+
+  target_include_directories(detection_utils PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+
+  target_link_libraries(detection_utils
+    ${OpenCV_LIBS}
+  )
+
+  ament_target_dependencies(detection_utils
+    OpenCV
+  )
+
+  # ------------------------
+  # Yolov8 Detector Library
+  # ------------------------
+  add_library(yolov8_detector SHARED
+    src/yolov8_detector.cpp
+  )
+
+  target_compile_features(yolov8_detector PUBLIC cxx_std_17)
+
+  target_include_directories(yolov8_detector PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+
+  target_link_libraries(yolov8_detector
+    trt_runner
+    detection_utils
+    ${OpenCV_LIBS}
+  )
+
+  ament_target_dependencies(yolov8_detector
+    OpenCV
+  )
+
+  # ------------------------
+  # YOLO Detection Node
+  # ------------------------
+  add_executable(yolov8_trt_node src/yolov8_trt_node.cpp)
+
+  target_compile_features(yolov8_trt_node PUBLIC cxx_std_17)
+
+  target_include_directories(yolov8_trt_node PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+
+  target_link_libraries(yolov8_trt_node
+    yolov8_detector
+    ${OpenCV_LIBS}
+  )
+
   ament_target_dependencies(yolov8_trt_node
     rclcpp
     sensor_msgs
     cv_bridge
-    message_filters
     OpenCV
     vision_msgs
+  )
+
+  set_target_properties(yolov8_trt_node PROPERTIES
+    BUILD_RPATH "${CUDA_TARGETS_LIB_DIR}"
+    INSTALL_RPATH "${CUDA_TARGETS_LIB_DIR}"
   )
 
 else()
@@ -155,8 +219,19 @@ endif()
 
 if(HAVE_TRT)
   install(TARGETS
+    trt_runner
+    detection_utils
+    yolov8_detector
     yolov8_trt_node
-    DESTINATION lib/${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}_Targets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+
+  install(
+    DIRECTORY include/
+    DESTINATION include
   )
 endif()
 
