@@ -11,6 +11,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(vision_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(image_geometry REQUIRED)
@@ -29,7 +30,7 @@ ament_target_dependencies(stereo_rectify_scale sensor_msgs OpenCV rclcpp)
 
 # SemanticPointCloud library
 add_library(semantic_pointcloud src/semantic_pointcloud.cpp)
-ament_target_dependencies(semantic_pointcloud sensor_msgs cv_bridge OpenCV rclcpp)
+ament_target_dependencies(semantic_pointcloud sensor_msgs vision_msgs cv_bridge OpenCV rclcpp)
 
 # ------------------------
 # TensorRT + CUDA (for foundation stereo)
@@ -121,7 +122,7 @@ if(HAVE_TRT)
   ament_target_dependencies(foundation_stereo_matcher OpenCV rclcpp)
 
   # Foundation stereo matcher node (refactored)
-  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node_new.cpp)
+  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node.cpp)
   target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
   
   set_target_properties(foundation_stereo_matcher_node PROPERTIES
@@ -149,23 +150,23 @@ endif()
 # ------------------------
 # Stereo rectify + scale node (refactored)
 # ------------------------
-add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node_new.cpp)
+add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node.cpp)
 target_link_libraries(stereo_rectify_scale_node
   stereo_rectify_scale
 )
 ament_target_dependencies(stereo_rectify_scale_node
-  rclcpp sensor_msgs cv_bridge OpenCV
+  rclcpp sensor_msgs cv_bridge message_filters OpenCV
 )
 
 # ------------------------
 # Semantic pointcloud node (refactored)
 # ------------------------
-add_executable(semantic_pointcloud_node src/semantic_pointcloud_node_new.cpp)
+add_executable(semantic_pointcloud_node src/semantic_pointcloud_node.cpp)
 target_link_libraries(semantic_pointcloud_node
   semantic_pointcloud
 )
 ament_target_dependencies(semantic_pointcloud_node
-  rclcpp sensor_msgs message_filters
+  rclcpp sensor_msgs vision_msgs message_filters
 )
 
 # ------------------------

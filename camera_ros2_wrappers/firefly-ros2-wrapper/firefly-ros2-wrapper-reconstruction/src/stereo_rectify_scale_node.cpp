@@ -1,22 +1,29 @@
+/*
+Stereo Rectify and Scale Node
+ROS2 wrapper for combined rectification and scaling operations.
+
+Run with:
+    ros2 run firefly-ros2-wrapper-reconstruction stereo_rectify_scale_node --ros-args \
+    -p output_width:=896 \
+    -p output_height:=672
+*/
+
+#include "firefly_reconstruction/stereo_rectify_scale.hpp"
+#include "firefly_reconstruction/qos_utils.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/exact_time.h>
+
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/calib3d.hpp>
-
+#include <memory>
 #include <mutex>
-#include <string>
-#include <vector>
 
-static rclcpp::ReliabilityPolicy parseReliability(const std::string &s)
-{
-    if (s == "reliable")
-        return rclcpp::ReliabilityPolicy::Reliable;
-    if (s == "best_effort")
-        return rclcpp::ReliabilityPolicy::BestEffort;
-    throw std::runtime_error("Invalid reliability: " + s + " (use reliable|best_effort)");
-}
+using namespace firefly_reconstruction;
 
 static int parseInterpolation(const std::string &s)
 {
@@ -32,115 +39,72 @@ class StereoRectifyScaleNode : public rclcpp::Node
 public:
     StereoRectifyScaleNode() : Node("stereo_rectify_scale_node")
     {
-        in_image_topic_ = declare_parameter<std::string>("in_image_topic", "image_raw");
-        in_info_topic_ = declare_parameter<std::string>("in_info_topic", "camera_info");
-        out_image_topic_ = declare_parameter<std::string>("out_image_topic", "image_rect_scaled");
-        out_info_topic_ = declare_parameter<std::string>("out_info_topic", "camera_info_scaled");
+        // Declare parameters
+        auto in_image_topic = declare_parameter<std::string>("in_image_topic", "image_raw");
+        auto in_info_topic = declare_parameter<std::string>("in_info_topic", "camera_info");
+        auto out_image_topic = declare_parameter<std::string>("out_image_topic", "image_rect_scaled");
+        auto out_info_topic = declare_parameter<std::string>("out_info_topic", "camera_info_scaled");
 
-        out_w_ = declare_parameter<int>("output_width", 896);
-        out_h_ = declare_parameter<int>("output_height", 672);
+        // Processor config
+        StereoRectifyScaleConfig config;
+        config.output_width = declare_parameter<int>("output_width", 896);
+        config.output_height = declare_parameter<int>("output_height", 672);
+        config.interpolation = parseInterpolation(
+            declare_parameter<std::string>("interpolation", "linear"));
 
-        interpolation_ = parseInterpolation(declare_parameter<std::string>("interpolation", "linear"));
+        // QoS params (now consistent with other nodes)
+        auto sub_rel = declare_parameter<std::string>("sub_qos.reliability", "reliable");
+        auto sub_dur = declare_parameter<std::string>("sub_qos.durability", "volatile");
+        auto sub_hist = declare_parameter<std::string>("sub_qos.history", "keep_last");
+        auto sub_depth = declare_parameter<int>("sub_qos.depth", 5);
+        auto pub_rel = declare_parameter<std::string>("pub_qos.reliability", "best_effort");
+        auto pub_dur = declare_parameter<std::string>("pub_qos.durability", "volatile");
+        auto pub_hist = declare_parameter<std::string>("pub_qos.history", "keep_last");
+        auto pub_depth = declare_parameter<int>("pub_qos.depth", 5);
 
-        sub_rel_ = parseReliability(declare_parameter<std::string>("sub_qos.reliability", "reliable"));
-        pub_rel_ = parseReliability(declare_parameter<std::string>("pub_qos.reliability", "best_effort"));
-        sub_depth_ = declare_parameter<int>("sub_qos.depth", 5);
-        pub_depth_ = declare_parameter<int>("pub_qos.depth", 5);
+        // Create processor
+        processor_ = std::make_unique<StereoRectifyScale>(config);
 
-        auto sub_qos = rclcpp::QoS(rclcpp::KeepLast(sub_depth_)).reliability(sub_rel_);
-        auto pub_qos = rclcpp::QoS(rclcpp::KeepLast(pub_depth_)).reliability(pub_rel_);
+        // Setup QoS
+        auto sub_qos = makeQos(sub_rel, sub_dur, sub_hist, sub_depth);
+        auto pub_qos = makeQos(pub_rel, pub_dur, pub_hist, pub_depth);
 
-        info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-            in_info_topic_, sub_qos,
-            std::bind(&StereoRectifyScaleNode::onInfo, this, std::placeholders::_1));
+        // Create synchronized subscribers using message_filters
+        img_sub_.subscribe(this, in_image_topic, sub_qos.get_rmw_qos_profile());
+        info_sub_.subscribe(this, in_info_topic, sub_qos.get_rmw_qos_profile());
 
-        img_sub_ = create_subscription<sensor_msgs::msg::Image>(
-            in_image_topic_, sub_qos,
-            std::bind(&StereoRectifyScaleNode::onImage, this, std::placeholders::_1));
+        // Create synchronizer for exact time matching
+        using Policy = message_filters::sync_policies::ExactTime<
+            sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
+        sync_ = std::make_shared<message_filters::Synchronizer<Policy>>(
+            Policy(sub_depth), img_sub_, info_sub_);
+        sync_->registerCallback(std::bind(&StereoRectifyScaleNode::onSync, this,
+                                          std::placeholders::_1, std::placeholders::_2));
 
-        img_pub_ = create_publisher<sensor_msgs::msg::Image>(out_image_topic_, pub_qos);
-        info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(out_info_topic_, pub_qos);
+        // Create publishers
+        img_pub_ = create_publisher<sensor_msgs::msg::Image>(out_image_topic, pub_qos);
+        info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(out_info_topic, pub_qos);
 
         RCLCPP_INFO(get_logger(), "Rectify+Scale: %s + %s -> %s + %s (out %dx%d)",
-                    in_image_topic_.c_str(), in_info_topic_.c_str(),
-                    out_image_topic_.c_str(), out_info_topic_.c_str(),
-                    out_w_, out_h_);
+                    in_image_topic.c_str(), in_info_topic.c_str(),
+                    out_image_topic.c_str(), out_info_topic.c_str(),
+                    config.output_width, config.output_height);
     }
 
 private:
-    void onInfo(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
+    void onSync(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg,
+                const sensor_msgs::msg::CameraInfo::ConstSharedPtr& info_msg)
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        last_info_ = *msg;
-        have_info_ = true;
-        maps_valid_ = false; // new calibration => recompute maps
-    }
+        
+        // Update camera info
+        processor_->updateCameraInfo(*info_msg);
 
-    void ensureMapsLocked(int in_w, int in_h)
-    {
-        if (!have_info_)
-            return;
-        if (maps_valid_ && in_w == last_in_w_ && in_h == last_in_h_)
-            return;
-
-        // Build OpenCV matrices from CameraInfo
-        cv::Mat K(3, 3, CV_64F, (void *)last_info_.k.data());
-        cv::Mat D((int)last_info_.d.size(), 1, CV_64F, (void *)last_info_.d.data());
-        cv::Mat R(3, 3, CV_64F, (void *)last_info_.r.data());
-        cv::Mat P(3, 4, CV_64F, (void *)last_info_.p.data());
-
-        // We want rectified image in the input resolution first:
-        cv::Size in_size(in_w, in_h);
-
-        // OpenCV expects 3x3 "new camera matrix". For rectified images, use the left 3x3 of P.
-        cv::Mat P3 = P(cv::Rect(0, 0, 3, 3)).clone();
-
-        cv::initUndistortRectifyMap(
-            K, D, R, P3, in_size, CV_32FC1,
-            map1_, map2_);
-
-        last_in_w_ = in_w;
-        last_in_h_ = in_h;
-        maps_valid_ = true;
-    }
-
-    static inline void scaleIntrinsics(sensor_msgs::msg::CameraInfo &ci, double sx, double sy)
-    {
-        // K (row-major)
-        ci.k[0] *= sx; // fx
-        ci.k[2] *= sx; // cx
-        ci.k[4] *= sy; // fy
-        ci.k[5] *= sy; // cy
-
-        // P (row-major 3x4): scale fx, fy, cx, cy, and also Tx if present
-        ci.p[0] *= sx; // fx
-        ci.p[2] *= sx; // cx
-        ci.p[3] *= sx; // Tx (baseline term in pixels)
-        ci.p[5] *= sy; // fy
-        ci.p[6] *= sy; // cy
-    }
-
-    void onImage(const sensor_msgs::msg::Image::SharedPtr msg)
-    {
-        sensor_msgs::msg::CameraInfo info_copy;
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            if (!have_info_)
-            {
-                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Waiting for CameraInfo...");
-                return;
-            }
-            info_copy = last_info_;
-            // recompute maps based on THIS image resolution
-            ensureMapsLocked((int)msg->width, (int)msg->height);
-            if (!maps_valid_)
-                return;
-        }
-
+        // Convert to OpenCV
         cv_bridge::CvImageConstPtr cv_in;
         try
         {
-            cv_in = cv_bridge::toCvShare(msg, msg->encoding);
+            cv_in = cv_bridge::toCvShare(img_msg, img_msg->encoding);
         }
         catch (const std::exception &e)
         {
@@ -148,66 +112,38 @@ private:
             return;
         }
 
-        // Rectify
-        cv::Mat rectified;
-        cv::remap(cv_in->image, rectified, map1_, map2_, interpolation_);
+        // Process
+        cv::Mat output;
+        sensor_msgs::msg::CameraInfo output_info;
+        if (!processor_->process(cv_in->image, output, output_info))
+        {
+            RCLCPP_ERROR(get_logger(), "Processing failed");
+            return;
+        }
 
-        // Scale
-        cv::Mat scaled;
-        cv::resize(rectified, scaled, cv::Size(out_w_, out_h_), 0, 0, interpolation_);
+        // Publish image
+        cv_bridge::CvImage out_msg;
+        out_msg.header = img_msg->header;
+        out_msg.encoding = img_msg->encoding;
+        out_msg.image = output;
+        img_pub_->publish(*out_msg.toImageMsg());
 
-        // Publish scaled image
-        cv_bridge::CvImage out;
-        out.header = msg->header;
-        out.encoding = msg->encoding;
-        out.image = scaled;
-        img_pub_->publish(*out.toImageMsg());
-
-        // Publish scaled CameraInfo (rectified)
-        // Make a rectified camera info:
-        // - D should be zeros (rectified image has no distortion)
-        // - R = Identity
-        // - K and P derived from incoming P/K but scaled to out resolution
-        // We’ll start from input info_copy and "rectified-ize" it.
-        sensor_msgs::msg::CameraInfo out_info = info_copy;
-        out_info.header = msg->header;
-        out_info.width = out_w_;
-        out_info.height = out_h_;
-
-        // For rectified images, D is usually zeroed and R is identity
-        out_info.d.assign(out_info.d.size(), 0.0);
-        out_info.r = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-
-        // IMPORTANT: scale intrinsics from input image size -> output size
-        const double sx = static_cast<double>(out_w_) / static_cast<double>(msg->width);
-        const double sy = static_cast<double>(out_h_) / static_cast<double>(msg->height);
-        scaleIntrinsics(out_info, sx, sy);
-
-        info_pub_->publish(out_info);
+        // Publish camera info
+        output_info.header = img_msg->header;
+        info_pub_->publish(output_info);
     }
 
-private:
-    std::string in_image_topic_, in_info_topic_;
-    std::string out_image_topic_, out_info_topic_;
-    int out_w_{896}, out_h_{672};
-    int interpolation_{cv::INTER_LINEAR};
+    std::unique_ptr<StereoRectifyScale> processor_;
+    std::mutex mtx_;
 
-    rclcpp::ReliabilityPolicy sub_rel_{rclcpp::ReliabilityPolicy::Reliable};
-    rclcpp::ReliabilityPolicy pub_rel_{rclcpp::ReliabilityPolicy::BestEffort};
-    int sub_depth_{5}, pub_depth_{5};
-
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
+    message_filters::Subscriber<sensor_msgs::msg::Image> img_sub_;
+    message_filters::Subscriber<sensor_msgs::msg::CameraInfo> info_sub_;
+    using SyncPolicy = message_filters::sync_policies::ExactTime<
+        sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
+    std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
+    
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr img_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
-
-    std::mutex mtx_;
-    bool have_info_{false};
-    bool maps_valid_{false};
-    int last_in_w_{-1}, last_in_h_{-1};
-    sensor_msgs::msg::CameraInfo last_info_;
-
-    cv::Mat map1_, map2_;
 };
 
 int main(int argc, char **argv)

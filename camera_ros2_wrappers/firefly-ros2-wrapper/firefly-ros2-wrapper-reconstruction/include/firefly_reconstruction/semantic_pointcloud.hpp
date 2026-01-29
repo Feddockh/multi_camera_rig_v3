@@ -5,6 +5,8 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <vision_msgs/msg/detection2_d.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 #include <memory>
 #include <string>
@@ -47,27 +49,13 @@ struct SemanticPointCloudConfig
     // Semantic parameters
     int background_class_id = -1;
     double background_confidence = 0.5;
-
-    // Depth filtering options
-    std::string depth_filter_mode = "none";
-    int depth_flying_ksize = 5;
-    double depth_flying_tau = 0.25;
-    int depth_flying_min_neighbors = 6;
-    int depth_median_ksize = 5;
-
-    // Point cloud filtering options
-    std::string pc_filter_mode = "none";
-    int pc_grid_ksize = 5;
-    double pc_grid_tau = 0.25;
-    int pc_grid_min_neighbors = 4;
-    int pc_knn_k = 20;
-    double pc_knn_stddev_multiplier = 2.0;
+    bool color_by_class = false;  // If true in semantic mode, color by class ID instead of RGB
 };
 
 class SemanticPointCloud
 {
 public:
-    explicit SemanticPointCloud(const SemanticPointCloudConfig &config);
+    explicit SemanticPointCloud(const SemanticPointCloudConfig &config, bool debug = false, rclcpp::Logger logger = rclcpp::get_logger("semantic_pointcloud"));
     ~SemanticPointCloud() = default;
 
     // Update camera intrinsics
@@ -96,23 +84,18 @@ public:
     bool processSemanticPointCloud(
         const sensor_msgs::msg::Image &disp_msg,
         const sensor_msgs::msg::Image &image_msg,
+        const std::vector<vision_msgs::msg::Detection2D> &detections,
+        double scale_x,
+        double scale_y,
         const std_msgs::msg::Header &header,
         sensor_msgs::msg::PointCloud2 &cloud_msg);
 
 private:
-    // Apply depth filtering to depth image
-    void applyDepthFiltering(std::vector<float> &depth, int out_h, int out_w);
-
-    // Apply point cloud filtering and generate keep mask
-    void applyPointCloudFiltering(
-        const cv::Mat &disp_img,
-        double fx, double fy, double cx, double cy,
-        double B, double maxR, int s,
-        int out_h, int out_w,
-        std::vector<uint8_t> &keep_mask);
-
     // Helper to pack RGB into a float (PCL convention)
     static float packRGBFloat(uint8_t r, uint8_t g, uint8_t b);
+    
+    // Helper to generate color from class ID
+    static float classIdToRGBFloat(int32_t class_id);
 
     SemanticPointCloudConfig config_;
     
@@ -120,6 +103,12 @@ private:
     bool have_info_{false};
     double fx_{0}, fy_{0}, cx_{0}, cy_{0};
     uint32_t img_w_{0}, img_h_{0};
+
+    // Debug flag
+    bool debug_{false};
+    
+    // Logger for debug output
+    rclcpp::Logger logger_;
 };
 
 } // namespace firefly_reconstruction

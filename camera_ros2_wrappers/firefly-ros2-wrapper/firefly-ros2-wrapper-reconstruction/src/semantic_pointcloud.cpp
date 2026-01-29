@@ -7,12 +7,13 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <iostream>
 
 namespace firefly_reconstruction
 {
 
-SemanticPointCloud::SemanticPointCloud(const SemanticPointCloudConfig &config)
-    : config_(config)
+SemanticPointCloud::SemanticPointCloud(const SemanticPointCloudConfig &config, bool debug, rclcpp::Logger logger)
+    : config_(config), debug_(debug), logger_(logger)
 {
 }
 
@@ -35,6 +36,60 @@ float SemanticPointCloud::packRGBFloat(uint8_t r, uint8_t g, uint8_t b)
     float f;
     std::memcpy(&f, &rgb, sizeof(float));
     return f;
+}
+
+float SemanticPointCloud::classIdToRGBFloat(int32_t class_id)
+{
+    // Generate distinct colors for different class IDs using a color palette
+    // Use a simple hashing scheme to generate colors
+    if (class_id < 0)
+    {
+        // Background: gray
+        return packRGBFloat(128, 128, 128);
+    }
+    
+    // Use a predefined color palette for common classes (0-19)
+    // Based on a distinct color scheme
+    const uint8_t palette[][3] = {
+        {230, 25, 75},    // Red - class 0
+        {60, 180, 75},    // Green - class 1
+        {255, 225, 25},   // Yellow - class 2
+        {0, 130, 200},    // Blue - class 3
+        {245, 130, 48},   // Orange - class 4
+        {145, 30, 180},   // Purple - class 5
+        {70, 240, 240},   // Cyan - class 6
+        {240, 50, 230},   // Magenta - class 7
+        {210, 245, 60},   // Lime - class 8
+        {250, 190, 212},  // Pink - class 9
+        {0, 128, 128},    // Teal - class 10
+        {220, 190, 255},  // Lavender - class 11
+        {170, 110, 40},   // Brown - class 12
+        {255, 250, 200},  // Beige - class 13
+        {128, 0, 0},      // Maroon - class 14
+        {170, 255, 195},  // Mint - class 15
+        {128, 128, 0},    // Olive - class 16
+        {255, 215, 180},  // Coral - class 17
+        {0, 0, 128},      // Navy - class 18
+        {128, 128, 128}   // Grey - class 19
+    };
+    
+    if (class_id < 20)
+    {
+        return packRGBFloat(palette[class_id][0], palette[class_id][1], palette[class_id][2]);
+    }
+    
+    // For class IDs >= 20, use a hash function to generate colors
+    uint32_t hash = (uint32_t)class_id * 2654435761u;  // Knuth's multiplicative hash
+    uint8_t r = (hash >> 16) & 0xFF;
+    uint8_t g = (hash >> 8) & 0xFF;
+    uint8_t b = hash & 0xFF;
+    
+    // Ensure colors are not too dark
+    r = (r < 50) ? r + 100 : r;
+    g = (g < 50) ? g + 100 : g;
+    b = (b < 50) ? b + 100 : b;
+    
+    return packRGBFloat(r, g, b);
 }
 
 bool SemanticPointCloud::processDepthImage(
@@ -80,9 +135,6 @@ bool SemanticPointCloud::processDepthImage(
         }
     }
 
-    // Apply depth filtering
-    applyDepthFiltering(depth, out_h, out_w);
-
     depth_msg.header = header;
     depth_msg.height = out_h;
     depth_msg.width = out_w;
@@ -95,105 +147,36 @@ bool SemanticPointCloud::processDepthImage(
     return true;
 }
 
-void SemanticPointCloud::applyDepthFiltering(std::vector<float> &depth, int out_h, int out_w)
-{
-    std::string dmode = config_.depth_filter_mode;
-    std::transform(dmode.begin(), dmode.end(), dmode.begin(),
-                   [](unsigned char c)
-                   { return static_cast<char>(std::tolower(c)); });
-
-    if (dmode == "median")
-    {
-        cv::Mat dmat(out_h, out_w, CV_32FC1, depth.data());
-        cv::Mat valid = (dmat == dmat) & (dmat > 0.0f);
-        cv::Mat tmp = dmat.clone();
-        tmp.setTo(0.0f, ~valid);
-
-        int k = std::max(3, config_.depth_median_ksize | 1);
-        cv::medianBlur(tmp, tmp, k);
-
-        tmp.setTo(std::numeric_limits<float>::quiet_NaN(), ~valid);
-        std::memcpy(depth.data(), tmp.ptr<float>(0), depth.size() * sizeof(float));
-    }
-    else if (dmode == "flying_pixel")
-    {
-        cv::Mat dmat(out_h, out_w, CV_32FC1, depth.data());
-
-        int k = std::max(3, config_.depth_flying_ksize | 1);
-        int r = k / 2;
-        const double tau = std::max(0.0, config_.depth_flying_tau);
-
-        cv::Mat tmp = dmat.clone();
-        for (int v = 0; v < tmp.rows; ++v)
-        {
-            float *row = tmp.ptr<float>(v);
-            for (int u = 0; u < tmp.cols; ++u)
-            {
-                const float z = row[u];
-                if (!(z == z) || z <= 0.0f)
-                    row[u] = 0.0f;
-            }
-        }
-
-        cv::Mat med;
-        cv::medianBlur(tmp, med, k);
-
-        for (int v = r; v < dmat.rows - r; ++v)
-        {
-            float *zrow = dmat.ptr<float>(v);
-            const float *mrow = med.ptr<float>(v);
-
-            for (int u = r; u < dmat.cols - r; ++u)
-            {
-                const float z = zrow[u];
-                if (!(z == z) || z <= 0.0f)
-                    continue;
-
-                const float m = mrow[u];
-                if (!(m > 0.0f))
-                    continue;
-
-                int valid_n = 0;
-                for (int yy = v - r; yy <= v + r; ++yy)
-                {
-                    const float *rr = dmat.ptr<float>(yy);
-                    for (int xx = u - r; xx <= u + r; ++xx)
-                    {
-                        const float zz = rr[xx];
-                        if ((zz == zz) && zz > 0.0f)
-                            valid_n++;
-                    }
-                }
-                if (valid_n < config_.depth_flying_min_neighbors)
-                    continue;
-
-                const double rel = std::abs((double)z - (double)m) / (double)m;
-                if (rel > tau)
-                {
-                    zrow[u] = std::numeric_limits<float>::quiet_NaN();
-                }
-            }
-        }
-    }
-}
-
 bool SemanticPointCloud::processNormalPointCloud(
     const sensor_msgs::msg::Image &disp_msg,
     const sensor_msgs::msg::Image &image_msg,
     const std_msgs::msg::Header &header,
     sensor_msgs::msg::PointCloud2 &cloud_msg)
 {
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] processNormalPointCloud called");
+
     if (!have_info_)
+    {
+        if (debug_)
+            RCLCPP_WARN(logger_, "[SemanticPointCloud] No camera info available");
         return false;
+    }
 
     // Convert disparity image
     cv_bridge::CvImageConstPtr disp_cv;
     try
     {
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Converting disparity (encoding: %s)", disp_msg.encoding.c_str());
         disp_cv = cv_bridge::toCvShare(std::make_shared<sensor_msgs::msg::Image>(disp_msg), "32FC1");
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Disparity converted successfully");
     }
-    catch (const std::exception &)
+    catch (const std::exception &e)
     {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert disparity: %s", e.what());
         return false;
     }
 
@@ -201,11 +184,17 @@ bool SemanticPointCloud::processNormalPointCloud(
     cv_bridge::CvImageConstPtr image_cv;
     try
     {
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Converting RGB image (encoding: %s)", image_msg.encoding.c_str());
         auto img_ptr = std::make_shared<sensor_msgs::msg::Image>(image_msg);
         image_cv = cv_bridge::toCvShare(img_ptr, image_msg.encoding);
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] RGB image converted successfully");
     }
-    catch (const std::exception &)
+    catch (const std::exception &e)
     {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert RGB image: %s", e.what());
         return false;
     }
 
@@ -214,7 +203,12 @@ bool SemanticPointCloud::processNormalPointCloud(
 
     // Verify image and disparity sizes match
     if (image_cv->image.rows != out_h || image_cv->image.cols != out_w)
+    {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Size mismatch: image %dx%d vs disparity %dx%d",
+                        image_cv->image.rows, image_cv->image.cols, out_h, out_w);
         return false;
+    }
 
     const double fx = fx_;
     const double fy = fy_;
@@ -224,9 +218,8 @@ bool SemanticPointCloud::processNormalPointCloud(
     const double maxR = config_.max_range_m;
     const int s = std::max(1, config_.stride);
 
-    // Apply pointcloud filtering to get keep mask
-    std::vector<uint8_t> keep_mask((size_t)out_h * out_w, 1);
-    applyPointCloudFiltering(disp_cv->image, fx, fy, cx, cy, B, maxR, s, out_h, out_w, keep_mask);
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Starting point counting (stride=%d, maxR=%.2f)", s, maxR);
 
     // Count valid points
     size_t n_valid = 0;
@@ -235,9 +228,6 @@ bool SemanticPointCloud::processNormalPointCloud(
         const float *row = disp_cv->image.ptr<float>(v);
         for (int u = 0; u < out_w; u += s)
         {
-            if (keep_mask[(size_t)v * out_w + u] == 0)
-                continue;
-
             const float d = row[u];
             if (d <= 0.0f)
             {
@@ -298,9 +288,6 @@ bool SemanticPointCloud::processNormalPointCloud(
         const float *row = disp_cv->image.ptr<float>(v);
         for (int u = 0; u < out_w; u += s)
         {
-            if (keep_mask[(size_t)v * out_w + u] == 0)
-                continue;
-
             const float d = row[u];
             bool use_max_range = false;
 
@@ -361,20 +348,36 @@ bool SemanticPointCloud::processNormalPointCloud(
 bool SemanticPointCloud::processSemanticPointCloud(
     const sensor_msgs::msg::Image &disp_msg,
     const sensor_msgs::msg::Image &image_msg,
+    const std::vector<vision_msgs::msg::Detection2D> &detections,
+    double scale_x,
+    double scale_y,
     const std_msgs::msg::Header &header,
     sensor_msgs::msg::PointCloud2 &cloud_msg)
 {
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] processSemanticPointCloud called with %zu detections", detections.size());
+
     if (!have_info_)
+    {
+        if (debug_)
+            RCLCPP_WARN(logger_, "[SemanticPointCloud] No camera info available");
         return false;
+    }
 
     // Convert disparity image
     cv_bridge::CvImageConstPtr disp_cv;
     try
     {
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Converting disparity (encoding: %s)", disp_msg.encoding.c_str());
         disp_cv = cv_bridge::toCvShare(std::make_shared<sensor_msgs::msg::Image>(disp_msg), "32FC1");
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Disparity converted successfully");
     }
-    catch (const std::exception &)
+    catch (const std::exception &e)
     {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert disparity: %s", e.what());
         return false;
     }
 
@@ -382,11 +385,17 @@ bool SemanticPointCloud::processSemanticPointCloud(
     cv_bridge::CvImageConstPtr image_cv;
     try
     {
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Converting RGB image (encoding: %s)", image_msg.encoding.c_str());
         auto img_ptr = std::make_shared<sensor_msgs::msg::Image>(image_msg);
         image_cv = cv_bridge::toCvShare(img_ptr, image_msg.encoding);
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] RGB image converted successfully");
     }
-    catch (const std::exception &)
+    catch (const std::exception &e)
     {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert RGB image: %s", e.what());
         return false;
     }
 
@@ -395,8 +404,80 @@ bool SemanticPointCloud::processSemanticPointCloud(
 
     // Verify image and disparity sizes match
     if (image_cv->image.rows != out_h || image_cv->image.cols != out_w)
+    {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Size mismatch: image %dx%d vs disparity %dx%d",
+                        image_cv->image.rows, image_cv->image.cols, out_h, out_w);
         return false;
+    }
 
+    // Create semantic labels and confidences arrays (initialized to background)
+    const size_t N = (size_t)out_h * out_w;
+    std::vector<int32_t> labels(N, config_.background_class_id);
+    std::vector<float> confidences(N, static_cast<float>(config_.background_confidence));
+
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Initialized labels/confidences array with %zu elements", N);
+
+    // Sort detections by confidence (ascending) so higher confidence overwrites lower
+    std::vector<vision_msgs::msg::Detection2D> sorted_dets = detections;
+    std::sort(sorted_dets.begin(), sorted_dets.end(),
+              [](const auto &a, const auto &b) {
+                  return a.results[0].hypothesis.score < b.results[0].hypothesis.score;
+              });
+
+    // Scale detections and assign labels
+    for (const auto &det : sorted_dets)
+    {
+        // Extract bounding box in original resolution
+        const float orig_cx = det.bbox.center.position.x;
+        const float orig_cy = det.bbox.center.position.y;
+        const float orig_w = det.bbox.size_x;
+        const float orig_h = det.bbox.size_y;
+
+        // Scale to rectified/scaled resolution
+        const float cx = orig_cx * scale_x;
+        const float cy = orig_cy * scale_y;
+        const float w = orig_w * scale_x;
+        const float h = orig_h * scale_y;
+
+        // Convert center+size to corners
+        int x1 = static_cast<int>(cx - w * 0.5f);
+        int y1 = static_cast<int>(cy - h * 0.5f);
+        int x2 = static_cast<int>(cx + w * 0.5f);
+        int y2 = static_cast<int>(cy + h * 0.5f);
+
+        // Clip to image bounds
+        x1 = std::max(0, x1);
+        y1 = std::max(0, y1);
+        x2 = std::min(out_w - 1, x2);
+        y2 = std::min(out_h - 1, y2);
+
+        const int32_t class_id = std::stoi(det.results[0].hypothesis.class_id);
+        const float conf = det.results[0].hypothesis.score;
+
+        if (debug_)
+            RCLCPP_INFO(logger_, "[SemanticPointCloud] Detection: class=%d conf=%.3f bbox=[%d,%d,%d,%d] (scaled from [%.1f,%.1f,%.1f,%.1f])",
+                       class_id, conf, x1, y1, x2, y2,
+                       orig_cx - orig_w*0.5f, orig_cy - orig_h*0.5f,
+                       orig_cx + orig_w*0.5f, orig_cy + orig_h*0.5f);
+
+        // Assign class_id and confidence to all pixels in bounding box
+        for (int v = y1; v <= y2; ++v)
+        {
+            for (int u = x1; u <= x2; ++u)
+            {
+                const size_t idx = (size_t)v * out_w + u;
+                labels[idx] = class_id;
+                confidences[idx] = conf;
+            }
+        }
+    }
+
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Finished assigning labels from %zu detections", detections.size());
+
+    // Now generate point cloud with semantic labels
     const double fx = fx_;
     const double fy = fy_;
     const double cx = cx_;
@@ -405,20 +486,8 @@ bool SemanticPointCloud::processSemanticPointCloud(
     const double maxR = config_.max_range_m;
     const int s = std::max(1, config_.stride);
 
-    // TODO: Implement detection-based semantic labeling
-    // For now, create semantic labels and confidences arrays filled with background values
-    const size_t N = (size_t)out_h * out_w;
-    std::vector<int32_t> labels(N, config_.background_class_id);
-    std::vector<float> confidences(N, static_cast<float>(config_.background_confidence));
-
-    // TODO: When detection message is available:
-    // 1. Scale detections from original resolution to current resolution
-    // 2. For each detection bounding box, assign class_id and confidence
-    //    to pixels within the box (highest confidence wins for overlaps)
-
-    // Apply pointcloud filtering
-    std::vector<uint8_t> keep_mask((size_t)out_h * out_w, 1);
-    applyPointCloudFiltering(disp_cv->image, fx, fy, cx, cy, B, maxR, s, out_h, out_w, keep_mask);
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Starting point counting (stride=%d, maxR=%.2f)", s, maxR);
 
     // Count valid points
     size_t n_valid = 0;
@@ -427,9 +496,6 @@ bool SemanticPointCloud::processSemanticPointCloud(
         const float *row = disp_cv->image.ptr<float>(v);
         for (int u = 0; u < out_w; u += s)
         {
-            if (keep_mask[(size_t)v * out_w + u] == 0)
-                continue;
-
             const float d = row[u];
             if (d <= 0.0f)
             {
@@ -449,6 +515,9 @@ bool SemanticPointCloud::processSemanticPointCloud(
             n_valid++;
         }
     }
+
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Found %zu valid points", n_valid);
 
     sensor_msgs::msg::PointCloud2 cloud;
     cloud.header = header;
@@ -501,9 +570,6 @@ bool SemanticPointCloud::processSemanticPointCloud(
         const float *row = disp_cv->image.ptr<float>(v);
         for (int u = 0; u < out_w; u += s)
         {
-            if (keep_mask[(size_t)v * out_w + u] == 0)
-                continue;
-
             const float d = row[u];
             bool use_max_range = false;
 
@@ -543,14 +609,24 @@ bool SemanticPointCloud::processSemanticPointCloud(
             const float Y = static_cast<float>((static_cast<double>(v) - cy) * Z / fy);
             const float Zf = static_cast<float>(Z);
 
-            // Sample color from image
-            const cv::Vec3b bgr = image_cv->image.at<cv::Vec3b>(v, u);
-            const float rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]);
-
             // Get semantic info for this pixel
             const size_t pixel_idx = (size_t)v * out_w + u;
             const int32_t class_id = labels[pixel_idx];
             const float conf = confidences[pixel_idx];
+
+            // Determine color: either from image RGB or from class ID
+            float rgb_f;
+            if (config_.color_by_class)
+            {
+                // Color by class ID
+                rgb_f = classIdToRGBFloat(class_id);
+            }
+            else
+            {
+                // Color by image RGB
+                const cv::Vec3b bgr = image_cv->image.at<cv::Vec3b>(v, u);
+                rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]);
+            }
 
             uint8_t *ptr = cloud.data.data() + idx * cloud.point_step;
             std::memcpy(ptr + 0, &X, sizeof(float));
@@ -564,95 +640,11 @@ bool SemanticPointCloud::processSemanticPointCloud(
         }
     }
 
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] Created semantic point cloud with %zu points", idx);
+
     cloud_msg = cloud;
     return true;
-}
-
-void SemanticPointCloud::applyPointCloudFiltering(
-    const cv::Mat &disp_img,
-    double fx, double fy, double cx, double cy,
-    double B, double maxR, int s,
-    int out_h, int out_w,
-    std::vector<uint8_t> &keep_mask)
-{
-    std::string pcmode = config_.pc_filter_mode;
-    std::transform(pcmode.begin(), pcmode.end(), pcmode.begin(),
-                   [](unsigned char c)
-                   { return static_cast<char>(std::tolower(c)); });
-
-    if (pcmode == "grid_outlier")
-    {
-        int k = std::max(3, config_.pc_grid_ksize | 1);
-        int r = k / 2;
-        const double tau = std::max(0.0, config_.pc_grid_tau);
-
-        // Build depth image from disparity
-        std::vector<float> zimg((size_t)out_h * out_w, std::numeric_limits<float>::quiet_NaN());
-        for (int v = 0; v < out_h; ++v)
-        {
-            const float *row = disp_img.ptr<float>(v);
-            float *zrow = zimg.data() + v * out_w;
-            for (int u = 0; u < out_w; ++u)
-            {
-                const float d = row[u];
-                if (d <= 0.0f)
-                    continue;
-                const double Z = fx * B / (double)d;
-                if (Z <= 0.0 || Z > maxR)
-                    continue;
-                zrow[u] = (float)Z;
-            }
-        }
-
-        cv::Mat zmat(out_h, out_w, CV_32FC1, zimg.data());
-        cv::Mat tmp = zmat.clone();
-        for (int v = 0; v < out_h; ++v)
-        {
-            float *row = tmp.ptr<float>(v);
-            for (int u = 0; u < out_w; ++u)
-            {
-                const float z = row[u];
-                if (!(z == z) || z <= 0.0f)
-                    row[u] = 0.0f;
-            }
-        }
-        cv::Mat med;
-        cv::medianBlur(tmp, med, k);
-
-        for (int v = r; v < out_h - r; ++v)
-        {
-            for (int u = r; u < out_w - r; ++u)
-            {
-                const float z = zimg[(size_t)v * out_w + u];
-                if (!(z == z) || z <= 0.0f)
-                    continue;
-
-                const float m = med.at<float>(v, u);
-                if (!(m > 0.0f))
-                    continue;
-
-                int valid_n = 0;
-                for (int yy = v - r; yy <= v + r; ++yy)
-                {
-                    for (int xx = u - r; xx <= u + r; ++xx)
-                    {
-                        const float zz = zimg[(size_t)yy * out_w + xx];
-                        if ((zz == zz) && zz > 0.0f)
-                            valid_n++;
-                    }
-                }
-                if (valid_n < config_.pc_grid_min_neighbors)
-                    continue;
-
-                const double rel = std::abs((double)z - (double)m) / (double)m;
-                if (rel > tau)
-                {
-                    keep_mask[(size_t)v * out_w + u] = 0;
-                }
-            }
-        }
-    }
-    // NOTE: knn_outlier filter removed for simplicity - can be added if needed
 }
 
 } // namespace firefly_reconstruction
