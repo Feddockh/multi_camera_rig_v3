@@ -69,158 +69,189 @@ def launch_setup(context, *args, **kwargs):
     launch_nodes.append(spinnaker_sync_container)
     # Current delay is about 0.02 seconds to get the images
     
-    # Add trigger node if enabled
-    enable_trigger = LaunchConfiguration('enable_trigger').perform(context).lower() == 'true'
-    if enable_trigger:
-        trigger_node = Node(
-            package='multi_camera_rig_trigger',
-            executable='trigger_node',
-            name='trigger_node',
+    # Add trigger node
+    trigger_node = Node(
+        package='multi_camera_rig_trigger',
+        executable='trigger_node',
+        name='trigger_node',
+        output='screen',
+        parameters=[{
+            'serial_port': LaunchConfiguration('trigger_serial_port'),
+            'baudrate': LaunchConfiguration('trigger_baudrate'),
+            'flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
+            'frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
+            'auto_connect': LaunchConfiguration('trigger_auto_connect'),
+            'auto_start': LaunchConfiguration('trigger_auto_start'),
+        }]
+    )
+    launch_nodes.append(trigger_node)
+    
+    # Stereo rectify + scale nodes (replaces QoS republisher + image_proc rectify)
+    output_width = int(LaunchConfiguration('output_width').perform(context))
+    output_height = int(LaunchConfiguration('output_height').perform(context))
+    
+    for cam_name in camera_names:
+        rectify_scale_node = Node(
+            package='firefly-ros2-wrapper-reconstruction',
+            executable='stereo_rectify_scale_node',
+            name=f'{cam_name}_rectify_scale',
             output='screen',
             parameters=[{
-                'serial_port': LaunchConfiguration('trigger_serial_port'),
-                'baudrate': LaunchConfiguration('trigger_baudrate'),
-                'flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
-                'frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
-                'auto_connect': LaunchConfiguration('trigger_auto_connect'),
-                'auto_start': LaunchConfiguration('trigger_auto_start'),
+                # Topics
+                'in_image_topic': f'/{cam_name}/image_raw',
+                'in_info_topic': f'/{cam_name}/camera_info',
+                'out_rect_image_topic': f'/{cam_name}/image_rect',
+                'out_rect_info_topic': f'/{cam_name}/camera_info_rect',
+                'out_rect_scaled_image_topic': f'/{cam_name}/image_rect_scaled',
+                'out_rect_scaled_info_topic': f'/{cam_name}/camera_info_rect_scaled',
+                # Scale settings
+                'output_width': output_width,
+                'output_height': output_height,
+                'interpolation': 'linear',
+                # Subscriber QoS
+                'sub_qos.reliability': 'reliable',
+                'sub_qos.durability': 'volatile',
+                'sub_qos.history': 'keep_last',
+                'sub_qos.depth': 5,
+                # Publisher QoS
+                'pub_qos.reliability': 'best_effort',
+                'pub_qos.durability': 'volatile',
+                'pub_qos.history': 'keep_last',
+                'pub_qos.depth': 5,
             }]
         )
-        launch_nodes.append(trigger_node)
-    
-    # Add rectification and scaling nodes for each camera
-    enable_rectification = LaunchConfiguration('enable_rectification').perform(context).lower() == 'true'
-    if enable_rectification:
-        # Stereo rectify + scale nodes (replaces QoS republisher + image_proc rectify)
-        output_width = int(LaunchConfiguration('output_width').perform(context))
-        output_height = int(LaunchConfiguration('output_height').perform(context))
-        
-        for cam_name in camera_names:
-            rectify_scale_node = Node(
-                package='firefly-ros2-wrapper-reconstruction',
-                executable='stereo_rectify_scale_node',
-                name=f'{cam_name}_rectify_scale',
-                output='screen',
-                parameters=[{
-                    # Topics
-                    'in_image_topic': f'/{cam_name}/image_raw',
-                    'in_info_topic': f'/{cam_name}/camera_info',
-                    'out_image_topic': f'/{cam_name}/image_rect_scaled',
-                    'out_info_topic': f'/{cam_name}/camera_info_rect_scaled',
-                    # Scale settings
-                    'output_width': output_width,
-                    'output_height': output_height,
-                    'interpolation': 'linear',
-                    # Subscriber QoS
-                    'sub_qos.reliability': 'reliable',
-                    'sub_qos.depth': 5,
-                    # Publisher QoS
-                    'pub_qos.reliability': 'best_effort',
-                    'pub_qos.depth': 5,
-                }]
-            )
-            launch_nodes.append(rectify_scale_node)
-            # Added delay here is about 0.02 seconds
-        
-        # # Add disparity computation node for the stereo pair
-        # enable_disparity = LaunchConfiguration('enable_disparity').perform(context).lower() == 'true'
-        # if enable_disparity and enable_rectification:
-        #     custom_disparity_node = Node(
-        #         package='firefly-ros2-wrapper-bringup',
-        #         executable='fs_disparity_node.py',
-        #         name='firefly_custom_disparity_node_fs',
-        #         parameters=[
-        #             {'use_sim_time': False},
-        #             {'height': 1080},
-        #             {'width': 1440},
-        #             {'baseline': 0.06},
-        #             {'scale_factor': 0.7},
-        #             {'vit_size': 'small'},
-        #         ],
-        #         output='screen'
-        #     )
-        #     nodes.append(custom_disparity_node)
+        launch_nodes.append(rectify_scale_node)
 
-        # Add foundation stereo point cloud node
-        enable_point_cloud = LaunchConfiguration('enable_point_cloud').perform(context).lower() == 'true'
-        if enable_point_cloud:
-            model_dir = LaunchConfiguration('model_dir').perform(context)
-            model = LaunchConfiguration('tensorrt_file').perform(context)
-            engine_path = os.path.join(model_dir, model)
-            
-            foundation_point_cloud_node = Node(
-                package='firefly-ros2-wrapper-reconstruction',
-                executable='foundation_stereo_matcher_node',
-                name='foundation_stereo_matcher_node',
-                parameters=[
-                    # TensorRT engine
-                    {'engine_path': engine_path},
-                    # Stereo parameters
-                    {'baseline': float(LaunchConfiguration('baseline').perform(context))},
-                    # Point cloud generation
-                    {'stride': int(LaunchConfiguration('stride').perform(context))},
-                    {'max_range_m': float(LaunchConfiguration('max_range_m').perform(context))},
-                    {'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true'},
-                    # Input topics
-                    {'left_image_topic': '/firefly_left/image_rect_scaled'},
-                    {'right_image_topic': '/firefly_right/image_rect_scaled'},
-                    {'left_info_topic': '/firefly_left/camera_info_rect_scaled'},
-                    # Output control
-                    {'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true'},
-                    {'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true'},
-                    {'publish_disparity': LaunchConfiguration('publish_disparity').perform(context).lower() == 'true'},
-                    # Output topics
-                    {'cloud_topic': LaunchConfiguration('cloud_topic').perform(context)},
-                    {'depth_topic': LaunchConfiguration('depth_topic').perform(context)},
-                    {'disparity_topic': LaunchConfiguration('disparity_topic').perform(context)},
-                    # Subscriber QoS settings
-                    {'sub_qos.reliability': 'best_effort'},
-                    {'sub_qos.durability': 'volatile'},
-                    {'sub_qos.history': 'keep_last'},
-                    {'sub_qos.depth': 5},
-                    # Publisher QoS settings
-                    {'pub_qos.reliability': 'best_effort'},
-                    {'pub_qos.durability': 'volatile'},
-                    {'pub_qos.history': 'keep_last'},
-                    {'pub_qos.depth': 5},
-                    ### Filter modes (sample configuration - speckle seems to work best)
-                    ### Disparity filter: none | median | bilateral | speckle | edge_flying_kill
-                    {'disp_filter.mode': 'speckle'},
-                    # median params
-                    {'disp_filter.median_ksize': 5},
-                    # bilateral params
-                    {'disp_filter.bilateral_d': 7},
-                    {'disp_filter.bilateral_sigma_color': 3.0},
-                    {'disp_filter.bilateral_sigma_space': 7.0},
-                    # speckle params
-                    {'disp_filter.speckle_max_size': 120},
-                    {'disp_filter.speckle_range': 1.0},
-                    {'disp_filter.speckle_scale': 16.0},
-                    # edge_flying_kill params
-                    {'disp_filter.edge_ksize': 5},
-                    {'disp_filter.edge_tau': 0.20},
-                    {'disp_filter.edge_min_neighbors': 6},
-                    ### Depth filter: none | flying_pixel | median
-                    {'depth_filter.mode': 'none'},
-                    # flying_pixel params
-                    {'depth_filter.flying_ksize': 5},
-                    {'depth_filter.flying_tau': 0.25},
-                    {'depth_filter.flying_min_neighbors': 6},
-                    # median params
-                    {'depth_filter.median_ksize': 5},
-                    ### Point cloud filter: none | grid_outlier | knn_outlier
-                    {'pc_filter.mode': 'none'},
-                    # grid_outlier params
-                    {'pc_filter.grid_ksize': 5},
-                    {'pc_filter.grid_tau': 0.25},
-                    {'pc_filter.grid_min_neighbors': 4},
-                    # knn_outlier params
-                    {'pc_filter.knn_k': 20},
-                    {'pc_filter.knn_stddev_multiplier': 2.0},
-                ],
-                output='screen'
-            )
-            launch_nodes.append(foundation_point_cloud_node)
+    # Add foundation stereo point cloud node
+    stereo_matcher_model_dir = LaunchConfiguration('stereo_matcher_model_dir').perform(context)
+    stereo_matcher_model_trt = LaunchConfiguration('stereo_matcher_model_trt').perform(context)
+    engine_path = os.path.join(stereo_matcher_model_dir, stereo_matcher_model_trt)
+    
+    foundation_stereo_matcher_node = Node(
+        package='firefly-ros2-wrapper-reconstruction',
+        executable='foundation_stereo_matcher_node',
+        name='foundation_stereo_matcher_node',
+        parameters=[{
+            # TensorRT engine
+            'engine_path': engine_path,
+            # Input topics
+            'left_image_topic': '/firefly_left/image_rect_scaled',
+            'right_image_topic': '/firefly_right/image_rect_scaled',
+            'left_info_topic': '/firefly_left/camera_info_rect_scaled',
+            # Output topic
+            'disparity_topic': '/firefly_left/disparity',
+            # Subscriber QoS settings
+            'sub_qos.reliability': 'best_effort',
+            'sub_qos.durability': 'volatile',
+            'sub_qos.history': 'keep_last',
+            'sub_qos.depth': 5,
+            # Publisher QoS settings
+            'pub_qos.reliability': 'best_effort',
+            'pub_qos.durability': 'volatile',
+            'pub_qos.history': 'keep_last',
+            'pub_qos.depth': 5,
+            # Disparity filter: none | speckle
+            'disp_filter.mode': 'speckle',
+            # speckle params
+            'disp_filter.speckle_max_size': 120,
+            'disp_filter.speckle_range': 1.0,
+            'disp_filter.speckle_scale': 16.0,
+        }],
+        output='screen'
+    )
+    launch_nodes.append(foundation_stereo_matcher_node)
+
+    # Add detection node
+    enable_detection = LaunchConfiguration('enable_detection').perform(context).lower() == 'true'
+    if enable_detection:
+        detection_model_dir = LaunchConfiguration('detection_model_dir').perform(context)
+        detection_model_trt = LaunchConfiguration('detection_model_trt').perform(context)
+        engine_path = os.path.join(detection_model_dir, detection_model_trt)
+        
+        yolo_node = Node(
+            package='firefly-ros2-wrapper-detection',
+            executable='yolov8_trt_node',
+            name='yolov8_trt_node',
+            output='screen',
+            parameters=[{
+                # Core
+                'engine_path': engine_path,
+                'image_topic': '/firefly_left/image_rect',
+                'detection_topic': '/firefly_left/detections',
+                # Model input (engine expects 1088x1440)
+                'input_width': LaunchConfiguration('yolo_input_width'),
+                'input_height': LaunchConfiguration('yolo_input_height'),
+                # Postprocess
+                'conf_thresh': LaunchConfiguration('yolo_conf_thresh'),
+                'iou_thresh': LaunchConfiguration('yolo_iou_thresh'),
+                'max_det': LaunchConfiguration('yolo_max_det'),
+                # Scale settings
+                'scale_output': True,
+                'output_width': output_width,
+                'output_height': output_height,
+                'detection_topic_scaled': '/firefly_left/detections_scaled',
+                # QoS subscriber
+                'sub_qos.reliability': 'reliable',
+                'sub_qos.durability': 'volatile',
+                'sub_qos.history': 'keep_last',
+                'sub_qos.depth': 5,
+                # QoS publisher
+                'pub_qos.reliability': 'best_effort',
+                'pub_qos.durability': 'volatile',
+                'pub_qos.history': 'keep_last',
+                'pub_qos.depth': 5,
+                # Debug
+                'debug': True,
+            }],
+            arguments=['--ros-args', '--log-level', 'info'],
+        )
+        launch_nodes.append(yolo_node)
+
+    # Add semantic pointcloud node to generate point clouds from disparity
+    semantic_pointcloud_node = Node(
+        package='firefly-ros2-wrapper-reconstruction',
+        executable='semantic_pointcloud_node',
+        name='semantic_pointcloud_node',
+        parameters=[{
+            # Mode selection
+            'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
+            # Stereo parameters
+            'baseline': 0.06,
+            # Point cloud generation
+            'stride': 1,
+            'max_range_m': float(LaunchConfiguration('max_range_m').perform(context)),
+            'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
+            # Input topics
+            'disparity_topic': '/firefly_left/disparity',
+            'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
+            'image_topic': '/firefly_left/image_rect_scaled',
+            'detection_topic': '/firefly_left/detections_scaled',
+            # Output control
+            'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true',
+            'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true',
+            # Output topics
+            'cloud_topic': "/firefly_left/points2",
+            'depth_topic': '/firefly_left/depth',
+            # Semantic parameters (for semantic mode)
+            'background_class_id': -1,
+            'background_confidence': 0.5,
+            'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
+            # Subscriber QoS settings
+            'sub_qos.reliability': 'best_effort',
+            'sub_qos.durability': 'volatile',
+            'sub_qos.history': 'keep_last',
+            'sub_qos.depth': 5,
+            # Publisher QoS settings
+            'pub_qos.reliability': 'best_effort',
+            'pub_qos.durability': 'volatile',
+            'pub_qos.history': 'keep_last',
+            'pub_qos.depth': 5,
+            # Debug
+            'debug': False,
+        }],
+        output='screen'
+    )
+    launch_nodes.append(semantic_pointcloud_node)
 
     use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
     if use_rviz_value.lower() == 'true':
@@ -244,7 +275,7 @@ def launch_setup(context, *args, **kwargs):
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_file],
-            parameters=[{'use_sim_time': True}],
+            parameters=[{'use_sim_time': False}],
             output='screen'
         )
         launch_nodes.append(rviz_node)
@@ -269,11 +300,6 @@ def generate_launch_description():
             description='Path to the Spinnaker camera parameter definitions YAML file.',
         ),
         DeclareLaunchArgument(
-            'enable_trigger',
-            default_value='true',
-            description='Enable hardware trigger node'
-        ),
-        DeclareLaunchArgument(
             'trigger_serial_port',
             default_value='/dev/ttyUSB0',
             description='Serial port for trigger connection'
@@ -290,7 +316,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'trigger_frame_rate_hz',
-            default_value='1',
+            default_value='5',
             description='Trigger frame rate in Hz (1-20)'
         ),
         DeclareLaunchArgument(
@@ -304,11 +330,6 @@ def generate_launch_description():
             description='Automatically start video triggering on launch'
         ),
         DeclareLaunchArgument(
-            'enable_rectification',
-            default_value='true',
-            description='Enable image rectification nodes for each camera'
-        ),
-        DeclareLaunchArgument(
             'output_width',
             default_value='448',
             description='Output width for rectified and scaled images'
@@ -317,21 +338,6 @@ def generate_launch_description():
             'output_height',
             default_value='224',
             description='Output height for rectified and scaled images'
-        ),
-        DeclareLaunchArgument(
-            'enable_point_cloud',
-            default_value='true',
-            description='Enable point cloud computation node for the stereo pair'
-        ),
-        DeclareLaunchArgument(
-            'baseline',
-            default_value='0.06',
-            description='Stereo baseline in meters'
-        ),
-        DeclareLaunchArgument(
-            'stride',
-            default_value='1',
-            description='Point cloud stride (1=full resolution, 2=quarter points, 4=1/16 points)'
         ),
         DeclareLaunchArgument(
             'max_range_m',
@@ -344,12 +350,12 @@ def generate_launch_description():
             description='Create background at max range value for missing depth points'
         ),
         DeclareLaunchArgument(
-            'model_dir',
+            'stereo_matcher_model_dir',
             default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-reconstruction'), 'models']),
             description='Directory containing TensorRT engine (.plan) files',
         ),
         DeclareLaunchArgument(
-            'tensorrt_file',
+            'stereo_matcher_model_trt',
             default_value='fs_224x448_vit-small_iters5.plan',
             description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
         ),
@@ -359,29 +365,59 @@ def generate_launch_description():
             description='Publish point cloud output'
         ),
         DeclareLaunchArgument(
+            'use_semantics',
+            default_value='true',
+            description='Enable semantic mode with detections for point cloud'
+        ),
+        DeclareLaunchArgument(
+            'color_by_class',
+            default_value='true',
+            description='In semantic mode, color points by class ID instead of RGB image'
+        ),
+        DeclareLaunchArgument(
             'publish_depth',
             default_value='false',
             description='Publish depth image output'
         ),
         DeclareLaunchArgument(
-            'publish_disparity',
-            default_value='false',
-            description='Publish disparity image output'
+            'enable_detection', 
+            default_value='true',
+            description='Enable YOLOv8 detection node'
         ),
         DeclareLaunchArgument(
-            'cloud_topic',
-            default_value='/firefly_left/points2',
-            description='Topic name for point cloud output'
+            'detection_model_dir',
+            default_value=PJoin([FindPackageShare('firefly-ros2-wrapper-detection'), 'models']),
+            description='Directory containing TensorRT engine (.plan) files',
         ),
         DeclareLaunchArgument(
-            'depth_topic',
-            default_value='/firefly_left/depth',
-            description='Topic name for depth image output'
+            'detection_model_trt', 
+            default_value='best_sim.plan',
+            description='TensorRT engine file for YOLOv8 detection model',
         ),
         DeclareLaunchArgument(
-            'disparity_topic',
-            default_value='/firefly_left/disparity',
-            description='Topic name for disparity image output'
+            'yolo_input_width', 
+            default_value='1440',
+            description='Input width for YOLOv8 model'
+        ),
+        DeclareLaunchArgument(
+            'yolo_input_height', 
+            default_value='1088',
+            description='Input height for YOLOv8 model'
+        ),
+        DeclareLaunchArgument(
+            'yolo_conf_thresh', 
+            default_value='0.25',
+            description='Confidence threshold for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_iou_thresh', 
+            default_value='0.45',
+            description='IOU threshold for YOLOv8 detection'
+        ),
+        DeclareLaunchArgument(
+            'yolo_max_det', 
+            default_value='300',
+            description='Maximum detections for YOLOv8'
         ),
         DeclareLaunchArgument(
             'use_rviz',
