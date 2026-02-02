@@ -58,12 +58,12 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install Python scripts
-install(PROGRAMS
-  scripts/fs_disparity_node.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME fs_disparity_node
-)
+# # Install Python scripts
+# install(PROGRAMS
+#   scripts/fs_disparity_node.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME fs_disparity_node
+# )
 
 install(
   DIRECTORY calibs configs launch params rviz
