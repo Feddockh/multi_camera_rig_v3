@@ -14,10 +14,15 @@ find_package(rclcpp_components REQUIRED)
 find_package(spinnaker_camera_driver REQUIRED)
 find_package(spinnaker_synchronized_camera_driver REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(stereo_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(image_geometry REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
 # ------------------------
@@ -46,6 +51,12 @@ ament_target_dependencies(depth_cleaner_node
 add_executable(qos_republisher_node src/qos_republisher_node.cpp)
 ament_target_dependencies(qos_republisher_node rclcpp)
 
+add_executable(aruco_detection_node src/aruco_detection_node.cpp)
+ament_target_dependencies(aruco_detection_node
+  rclcpp sensor_msgs geometry_msgs visualization_msgs cv_bridge tf2_ros tf2_geometry_msgs OpenCV
+)
+target_include_directories(aruco_detection_node PUBLIC ${EIGEN3_INCLUDE_DIRS})
+
 # ------------------------
 # Install
 # ------------------------
@@ -55,15 +66,9 @@ install(TARGETS
   flash_simulator_node
   depth_cleaner_node
   qos_republisher_node
+  aruco_detection_node
   DESTINATION lib/${PROJECT_NAME}
 )
-
-# # Install Python scripts
-# install(PROGRAMS
-#   scripts/fs_disparity_node.py
-#   DESTINATION lib/${PROJECT_NAME}
-#   RENAME fs_disparity_node
-# )
 
 install(
   DIRECTORY calibs configs launch params rviz

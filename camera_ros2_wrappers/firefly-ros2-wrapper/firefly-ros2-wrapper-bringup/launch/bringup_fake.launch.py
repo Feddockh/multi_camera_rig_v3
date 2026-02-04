@@ -28,6 +28,34 @@ def launch_setup(context, *args, **kwargs):
         spinnaker_config[cam]['parameter_file'] = spinnaker_param_file
         spinnaker_config[cam]['camerainfo_url'] = 'file://' + calib_dir + '/' + cam + '.yaml'
 
+    launch_nodes = []
+    use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
+    if use_rviz_value.lower() == 'true':
+        # Include the firefly description launch file
+        firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')
+        description_launch_file = os.path.join(firefly_description_pkg, 'launch', 'description.launch.py')
+        
+        description_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(description_launch_file),
+            launch_arguments={
+                'use_sim_time': 'true',
+                'use_rviz': 'false',
+            }.items()
+        )
+        launch_nodes.append(description_launch)
+        # Use our own RViz config
+        firefly_bringup_pkg = get_package_share_directory('firefly-ros2-wrapper-bringup')
+        rviz_config_file = PJoin([firefly_bringup_pkg, 'rviz', 'view.rviz'])
+        rviz_node = Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', rviz_config_file],
+            parameters=[{'use_sim_time': True}],
+            output='screen'
+        )
+        launch_nodes.append(rviz_node)
+
     sensor_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -48,7 +76,7 @@ def launch_setup(context, *args, **kwargs):
             {'qos': 'reliable'},
         ],
     )
-    launch_nodes = [sensor_bridge]
+    launch_nodes.append(sensor_bridge)
 
     # Hardware trigger node
     trigger_node = Node(
@@ -124,6 +152,45 @@ def launch_setup(context, *args, **kwargs):
         )
         launch_nodes.append(rectify_scale_node)
 
+    # Add ArUco marker detection node for GT generation
+    detect_markers = LaunchConfiguration('detect_markers').perform(context).lower() == 'true'
+    if detect_markers:
+        marker_dict = LaunchConfiguration('marker_dict').perform(context)
+        marker_size = float(LaunchConfiguration('marker_length_m').perform(context))
+        
+        # Parse marker IDs and their class assignments
+        marker_ids_str = LaunchConfiguration('marker_ids').perform(context)
+        marker_class_ids_str = LaunchConfiguration('marker_class_ids').perform(context)
+        
+        marker_ids = [int(x) for x in marker_ids_str.split(',') if x.strip()]
+        marker_class_ids = [int(x) for x in marker_class_ids_str.split(',') if x.strip()]
+        
+        marker_output_file = LaunchConfiguration('marker_output_file').perform(context)
+        
+        aruco_node = Node(
+            package='firefly-ros2-wrapper-bringup',
+            executable='aruco_detection_node',
+            name='aruco_detection_node',
+            output='screen',
+            parameters=[{
+                'use_sim_time': True,
+                'image_topic': '/firefly_left/image_rect',
+                'camera_info_topic': '/firefly_left/camera_info_rect',
+                'det_topic': '/firefly_left/aruco_det',
+                'map_frame': 'map',
+                'marker_size': marker_size,
+                'dictionary': marker_dict,
+                'max_process_rate_hz': 2.0,
+                'draw_rejected': False,
+                'marker_ids': marker_ids,
+                'marker_class_ids': marker_class_ids,
+                'marker_output_file': marker_output_file,
+            }],
+        )
+        launch_nodes.append(aruco_node)
+        # Return early since we don't need other nodes when generating GT
+        return launch_nodes
+
     # Add foundation stereo point cloud node
     stereo_matcher_model_dir = LaunchConfiguration('stereo_matcher_model_dir').perform(context)
     stereo_matcher_model_trt = LaunchConfiguration('stereo_matcher_model_trt').perform(context)
@@ -162,8 +229,8 @@ def launch_setup(context, *args, **kwargs):
         output='screen'
     )
     launch_nodes.append(foundation_stereo_matcher_node)
-
-    # Add detection node
+    
+    # Run YOLO detection node if enabled
     enable_detection = LaunchConfiguration('enable_detection').perform(context).lower() == 'true'
     if enable_detection:
         detection_model_dir = LaunchConfiguration('detection_model_dir').perform(context)
@@ -254,33 +321,6 @@ def launch_setup(context, *args, **kwargs):
         output='screen'
     )
     launch_nodes.append(semantic_pointcloud_node)
-
-    use_rviz_value = LaunchConfiguration('use_rviz').perform(context)
-    if use_rviz_value.lower() == 'true':
-        # Include the firefly description launch file
-        firefly_description_pkg = get_package_share_directory('firefly-ros2-wrapper-description')
-        description_launch_file = os.path.join(firefly_description_pkg, 'launch', 'description.launch.py')
-        
-        description_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(description_launch_file),
-            launch_arguments={
-                'use_sim_time': 'true',
-                'use_rviz': 'false',
-            }.items()
-        )
-        launch_nodes.append(description_launch)
-        # Use our own RViz config
-        firefly_bringup_pkg = get_package_share_directory('firefly-ros2-wrapper-bringup')
-        rviz_config_file = PJoin([firefly_bringup_pkg, 'rviz', 'view.rviz'])
-        rviz_node = Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['-d', rviz_config_file],
-            parameters=[{'use_sim_time': True}],
-            output='screen'
-        )
-        launch_nodes.append(rviz_node)
 
     return launch_nodes
 
@@ -425,6 +465,36 @@ def generate_launch_description():
             'use_rviz',
             default_value='false',
             description='Launch RViz2 to visualize camera and point cloud data'
+        ),
+        DeclareLaunchArgument(
+            'detect_markers',
+            default_value='false',
+            description='Enable ArUco marker detection for GT generation (disables YOLO and pointcloud)'
+        ),
+        DeclareLaunchArgument(
+            'marker_dict',
+            default_value='DICT_4X4_50',
+            description='ArUco dictionary for marker detection'
+        ),
+        DeclareLaunchArgument(
+            'marker_length_m',
+            default_value='0.05',
+            description='Physical size of ArUco markers in meters'
+        ),
+        DeclareLaunchArgument(
+            'marker_ids',
+            default_value='0,1,2,3,4,5,6,7,8,9,10,11',
+            description='Comma-separated list of marker IDs (parallel to marker_class_ids)'
+        ),
+        DeclareLaunchArgument(
+            'marker_class_ids',
+            default_value='0,0,0,0,1,1,1,1,1,1,1,1',
+            description='Comma-separated list of class IDs for each marker (parallel to marker_ids). Supports 0-9+ classes.'
+        ),
+        DeclareLaunchArgument(
+            'marker_output_file',
+            default_value='aruco_gt_points.yaml',
+            description='Output file path for GT marker positions'
         ),
         OpaqueFunction(function=launch_setup)
     ])
