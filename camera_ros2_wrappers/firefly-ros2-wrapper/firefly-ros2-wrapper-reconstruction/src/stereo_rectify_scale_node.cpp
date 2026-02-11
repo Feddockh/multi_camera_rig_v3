@@ -46,6 +46,7 @@ public:
         auto out_rect_info_topic = declare_parameter<std::string>("out_rect_info_topic", "camera_info_rect");
         auto out_rect_scaled_image_topic = declare_parameter<std::string>("out_rect_scaled_image_topic", "image_rect_scaled");
         auto out_rect_scaled_info_topic = declare_parameter<std::string>("out_rect_scaled_info_topic", "camera_info_rect_scaled");
+        publish_scaled_ = declare_parameter<bool>("publish_scaled", true);
 
         // Processor config
         StereoRectifyScaleConfig config;
@@ -136,25 +137,28 @@ private:
         rect_info.header = img_msg->header;
         rect_info_pub_->publish(rect_info);
 
-        // Step 2: Scale the rectified image
-        cv::Mat scaled_output;
-        sensor_msgs::msg::CameraInfo scaled_info;
-        if (!processor_->scale(rect_output, rect_info, scaled_output, scaled_info))
-        {
-            RCLCPP_ERROR(get_logger(), "Scaling failed");
-            return;
+        if (publish_scaled_) {
+
+            // Step 2: Scale the rectified image
+            cv::Mat scaled_output;
+            sensor_msgs::msg::CameraInfo scaled_info;
+            if (!processor_->scale(rect_output, rect_info, scaled_output, scaled_info))
+            {
+                RCLCPP_ERROR(get_logger(), "Scaling failed");
+                return;
+            }
+
+            // Publish rectified+scaled image
+            cv_bridge::CvImage scaled_msg;
+            scaled_msg.header = img_msg->header;
+            scaled_msg.encoding = img_msg->encoding;
+            scaled_msg.image = scaled_output;
+            rect_scaled_img_pub_->publish(*scaled_msg.toImageMsg());
+
+            // Publish rectified+scaled camera info
+            scaled_info.header = img_msg->header;
+            rect_scaled_info_pub_->publish(scaled_info);
         }
-
-        // Publish rectified+scaled image
-        cv_bridge::CvImage scaled_msg;
-        scaled_msg.header = img_msg->header;
-        scaled_msg.encoding = img_msg->encoding;
-        scaled_msg.image = scaled_output;
-        rect_scaled_img_pub_->publish(*scaled_msg.toImageMsg());
-
-        // Publish rectified+scaled camera info
-        scaled_info.header = img_msg->header;
-        rect_scaled_info_pub_->publish(scaled_info);
     }
 
     std::unique_ptr<StereoRectifyScale> processor_;
@@ -170,6 +174,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rect_info_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rect_scaled_img_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rect_scaled_info_pub_;
+    bool publish_scaled_;
 };
 
 int main(int argc, char **argv)

@@ -22,6 +22,7 @@ find_package(message_filters REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
@@ -57,6 +58,16 @@ ament_target_dependencies(aruco_detection_node
 )
 target_include_directories(aruco_detection_node PUBLIC ${EIGEN3_INCLUDE_DIRS})
 
+add_executable(image_saver_node src/image_saver_node.cpp)
+ament_target_dependencies(image_saver_node
+  rclcpp sensor_msgs cv_bridge OpenCV
+)
+
+add_executable(joy_trigger_node src/joy_trigger_node.cpp)
+ament_target_dependencies(joy_trigger_node
+  rclcpp sensor_msgs std_srvs
+)
+
 # ------------------------
 # Install
 # ------------------------
@@ -67,6 +78,8 @@ install(TARGETS
   depth_cleaner_node
   qos_republisher_node
   aruco_detection_node
+  image_saver_node
+  joy_trigger_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
