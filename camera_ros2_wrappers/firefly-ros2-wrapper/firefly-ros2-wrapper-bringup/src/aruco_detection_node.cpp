@@ -87,7 +87,33 @@ namespace firefly_ros2_wrapper
             : Node("aruco_detection_node", options),
               tf_buffer_(this->get_clock()),
               tf_listener_(tf_buffer_)
-        {
+        {            
+            // ArUco detector parameters for fine-tuning
+            this->declare_parameter<int>("corner_refinement_method", 1); // 0=NONE, 1=SUBPIX, 2=CONTOUR
+            this->declare_parameter<int>("corner_refinement_win_size", 5);
+            this->declare_parameter<int>("corner_refinement_max_iterations", 30);
+            this->declare_parameter<double>("corner_refinement_min_accuracy", 0.1);
+
+            this->declare_parameter<int>("adaptive_thresh_win_size_min", 3);
+            this->declare_parameter<int>("adaptive_thresh_win_size_max", 23);
+            this->declare_parameter<int>("adaptive_thresh_win_size_step", 10);
+            this->declare_parameter<double>("adaptive_thresh_constant", 7.0);
+
+            this->declare_parameter<double>("min_marker_perimeter_rate", 0.03);
+            this->declare_parameter<double>("max_marker_perimeter_rate", 4.0);
+            this->declare_parameter<double>("polygonal_approx_accuracy_rate", 0.03);
+
+            this->declare_parameter<double>("min_corner_distance_rate", 0.01);
+            this->declare_parameter<int>("min_distance_to_border", 1);
+            this->declare_parameter<double>("min_marker_distance_rate", 0.01);
+            this->declare_parameter<int>("marker_border_bits", 1);
+
+            this->declare_parameter<double>("max_erroneous_bits_in_border_rate", 0.35);
+            this->declare_parameter<double>("error_correction_rate", 0.5);
+            
+            this->declare_parameter<int>("perspective_remove_pixel_per_cell", 4);
+            this->declare_parameter<double>("perspective_remove_ignored_margin_per_cell", 0.13);
+
             // Declare parameters
             this->declare_parameter<std::string>("image_topic", "/firefly_left/image_rect");
             this->declare_parameter<std::string>("camera_info_topic", "/firefly_left/camera_info_rect");
@@ -242,8 +268,41 @@ namespace firefly_ros2_wrapper
 
             aruco_dict_ = cv::aruco::getPredefinedDictionary(it->second);
             aruco_params_ = cv::aruco::DetectorParameters::create();
+            
+            // Apply custom detector parameters
+            aruco_params_->cornerRefinementMethod = this->get_parameter("corner_refinement_method").as_int();
+            aruco_params_->cornerRefinementWinSize = this->get_parameter("corner_refinement_win_size").as_int();
+            aruco_params_->cornerRefinementMaxIterations = this->get_parameter("corner_refinement_max_iterations").as_int();
+            aruco_params_->cornerRefinementMinAccuracy = this->get_parameter("corner_refinement_min_accuracy").as_double();
+
+            aruco_params_->adaptiveThreshWinSizeMin = this->get_parameter("adaptive_thresh_win_size_min").as_int();
+            aruco_params_->adaptiveThreshWinSizeMax = this->get_parameter("adaptive_thresh_win_size_max").as_int();
+            aruco_params_->adaptiveThreshWinSizeStep = this->get_parameter("adaptive_thresh_win_size_step").as_int();
+            aruco_params_->adaptiveThreshConstant = this->get_parameter("adaptive_thresh_constant").as_double();
+            
+            aruco_params_->minMarkerPerimeterRate = this->get_parameter("min_marker_perimeter_rate").as_double();
+            aruco_params_->maxMarkerPerimeterRate = this->get_parameter("max_marker_perimeter_rate").as_double();
+            aruco_params_->polygonalApproxAccuracyRate = this->get_parameter("polygonal_approx_accuracy_rate").as_double();
+
+            aruco_params_->minCornerDistanceRate = this->get_parameter("min_corner_distance_rate").as_double();
+            aruco_params_->minDistanceToBorder = this->get_parameter("min_distance_to_border").as_int();
+            aruco_params_->minMarkerDistanceRate = this->get_parameter("min_marker_distance_rate").as_double();
+            aruco_params_->markerBorderBits = this->get_parameter("marker_border_bits").as_int();
+
+            aruco_params_->maxErroneousBitsInBorderRate = this->get_parameter("max_erroneous_bits_in_border_rate").as_double();
+            aruco_params_->errorCorrectionRate = this->get_parameter("error_correction_rate").as_double();
+
+            aruco_params_->perspectiveRemovePixelPerCell = this->get_parameter("perspective_remove_pixel_per_cell").as_int();
+            aruco_params_->perspectiveRemoveIgnoredMarginPerCell = this->get_parameter("perspective_remove_ignored_margin_per_cell").as_double();
 
             RCLCPP_INFO(this->get_logger(), "Initialized ArUco dictionary: %s", dict_upper.c_str());
+            RCLCPP_INFO(this->get_logger(), "Corner refinement method: %d (0=NONE, 1=SUBPIX, 2=CONTOUR)", 
+                        aruco_params_->cornerRefinementMethod);
+            RCLCPP_INFO(this->get_logger(), "Adaptive threshold constant: %.1f", aruco_params_->adaptiveThreshConstant);
+            RCLCPP_INFO(this->get_logger(), "Min/Max marker perimeter rate: %.3f / %.3f", 
+                        aruco_params_->minMarkerPerimeterRate, aruco_params_->maxMarkerPerimeterRate);
+            RCLCPP_INFO(this->get_logger(), "Error correction rate: %.2f", aruco_params_->errorCorrectionRate);
+            RCLCPP_INFO(this->get_logger(), "Marker border bits: %d", aruco_params_->markerBorderBits);
         }
 
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg)

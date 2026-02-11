@@ -177,7 +177,7 @@ def launch_setup(context, *args, **kwargs):
                 'image_topic': '/firefly_left/image_rect',
                 'camera_info_topic': '/firefly_left/camera_info_rect',
                 'det_topic': '/firefly_left/aruco_det',
-                'map_frame': 'map',
+                'map_frame': LaunchConfiguration('map_frame').perform(context),
                 'marker_size': marker_size,
                 'dictionary': marker_dict,
                 'max_process_rate_hz': 2.0,
@@ -358,7 +358,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'trigger_frame_rate_hz',
-            default_value='5',
+            default_value='1',
             description='Trigger frame rate in Hz (1-20)'
         ),
         DeclareLaunchArgument(
@@ -493,8 +493,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'marker_output_file',
-            default_value='aruco_gt_points.yaml',
+            default_value='aruco_gt_points_sim.yaml',
             description='Output file path for GT marker positions'
+        ),
+        DeclareLaunchArgument(
+            'map_frame',
+            default_value='map',
+            description='Map frame for ArUco marker poses'
         ),
         OpaqueFunction(function=launch_setup)
     ])
