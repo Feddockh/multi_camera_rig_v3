@@ -1,1 +1,0 @@
-ROS2 wrapper for Ximea Camera.
