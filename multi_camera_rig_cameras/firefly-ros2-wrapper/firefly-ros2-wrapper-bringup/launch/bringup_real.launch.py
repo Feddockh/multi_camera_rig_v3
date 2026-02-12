@@ -181,26 +181,6 @@ def launch_setup(context, *args, **kwargs):
                 'marker_ids': marker_ids,
                 'marker_class_ids': marker_class_ids,
                 'marker_output_file': marker_output_file,
-                # Detection parameters for fine-tuning
-                # 'corner_refinement_method': 0, # 0=NONE, 1=SUBPIX, 2=CONTOUR
-                # 'corner_refinement_win_size': 5,
-                # 'corner_refinement_max_iterations': 30,
-                # 'corner_refinement_min_accuracy': 0.1,
-                # 'adaptive_thresh_win_size_min': 3,
-                # 'adaptive_thresh_win_size_max': 23,
-                # 'adaptive_thresh_win_size_step': 10,
-                # 'adaptive_thresh_constant': 7.0,
-                # 'min_marker_perimeter_rate': 0.03,
-                # 'max_marker_perimeter_rate': 4.0,
-                # 'polygonal_approx_accuracy_rate': 0.03,
-                # 'min_corner_distance_rate': 0.05,
-                # 'min_distance_to_border': 3,
-                # 'min_marker_distance_rate': 0.05,
-                # 'max_erroneous_bits_in_border_rate': 0.35,
-                # 'error_correction_rate': 0.6,
-                # 'min_otsu_std_dev': 5.0,
-                # 'perspective_remove_pixel_per_cell': 4,
-                # 'perspective_remove_ignored_margin_per_cell': 0.13,
             }],
         )
         launch_nodes.append(aruco_node)
@@ -449,7 +429,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'detection_model_trt', 
-            default_value='best_real.plan',
+            default_value='best_lab.plan',
             description='TensorRT engine file for YOLOv8 detection model',
         ),
         DeclareLaunchArgument(

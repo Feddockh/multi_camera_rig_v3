@@ -55,7 +55,7 @@
         </joint>
 
         <!-- ZED Camera -->
-        <xacro:include filename="$(find zed_wrapper)/urdf/zed_macro.urdf.xacro"/>
+        <!-- <xacro:include filename="$(find zed_wrapper)/urdf/zed_macro.urdf.xacro"/>
         <xacro:zed_camera name="zed2i"
                         model="zed2i"
                         enable_gnss="false"
@@ -66,6 +66,6 @@
             <parent link="multi_camera_rig_link"/>
             <child link="zed2i_camera_link"/>
             <origin xyz="0.0 0.05350000 -0.04838454" rpy="0 0 ${pi/2}"/>
-        </joint>
+        </joint> -->
     </xacro:macro>
 </robot>
