@@ -1,5 +1,5 @@
-[submodule "external/flir_camera_driver"]
-	path = external/flir_camera_driver
+[submodule "multi_camera_rig_cameras/firefly-ros2-wrapper/flir_camera_driver"]
+	path = multi_camera_rig_cameras/firefly-ros2-wrapper/flir_camera_driver
 	url = https://github.com/ros-drivers/flir_camera_driver.git
 [submodule "external/FoundationStereo"]
 	path = external/FoundationStereo
