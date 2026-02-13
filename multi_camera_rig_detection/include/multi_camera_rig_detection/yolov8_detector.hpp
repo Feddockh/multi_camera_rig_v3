@@ -1,14 +1,14 @@
-#ifndef FIREFLY_DETECTION_YOLOV8_DETECTOR_HPP
-#define FIREFLY_DETECTION_YOLOV8_DETECTOR_HPP
+#ifndef MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP
+#define MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP
 
 #include "multi_camera_rig_common/trt_runner.hpp"
-#include "firefly_detection/detection_utils.hpp"
+#include "multi_camera_rig_detection/detection_utils.hpp"
 #include <opencv2/core.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace firefly_detection
+namespace multi_camera_rig_detection
 {
 
 /**
@@ -82,6 +82,6 @@ private:
     LetterboxInfo lb_info_;
 };
 
-} // namespace firefly_detection
+} // namespace multi_camera_rig_detection
 
-#endif // FIREFLY_DETECTION_YOLOV8_DETECTOR_HPP
+#endif // MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP

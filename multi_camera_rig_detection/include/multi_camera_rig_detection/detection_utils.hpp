@@ -1,5 +1,5 @@
-#ifndef FIREFLY_DETECTION_DETECTION_UTILS_HPP
-#define FIREFLY_DETECTION_DETECTION_UTILS_HPP
+#ifndef MULTI_CAMERA_RIG_DETECTION_DETECTION_UTILS_HPP
+#define MULTI_CAMERA_RIG_DETECTION_DETECTION_UTILS_HPP
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <unordered_map>
 
-namespace firefly_detection
+namespace multi_camera_rig_detection
 {
 
 /**
@@ -275,6 +275,6 @@ inline void parseYoloCxCyWhClassScores(const float *out,
     dets = std::move(out_dets);
 }
 
-} // namespace firefly_detection
+} // namespace multi_camera_rig_detection
 
-#endif // FIREFLY_DETECTION_DETECTION_UTILS_HPP
+#endif // MULTI_CAMERA_RIG_DETECTION_DETECTION_UTILS_HPP

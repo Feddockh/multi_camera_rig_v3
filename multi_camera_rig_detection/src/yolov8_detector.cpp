@@ -1,8 +1,8 @@
-#include "firefly_detection/yolov8_detector.hpp"
+#include "multi_camera_rig_detection/yolov8_detector.hpp"
 #include <chrono>
 #include <stdexcept>
 
-namespace firefly_detection
+namespace multi_camera_rig_detection
 {
 
 // Helper to convert nvinfer1::Dims to TensorDims
@@ -87,4 +87,4 @@ void Yolov8Detector::scaleDetections(const std::vector<Det> &dets,
     }
 }
 
-} // namespace firefly_detection
+} // namespace multi_camera_rig_detection

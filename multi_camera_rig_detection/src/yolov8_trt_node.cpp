@@ -31,7 +31,7 @@ Notes:
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc.hpp>
 
-#include "firefly_detection/yolov8_detector.hpp"
+#include "multi_camera_rig_detection/yolov8_detector.hpp"
 #include "multi_camera_rig_common/qos_utils.hpp"
 
 #include <iomanip>
@@ -40,9 +40,9 @@ Notes:
 #include <string>
 #include <vector>
 
-using firefly_detection::Yolov8Detector;
-using firefly_detection::Yolov8DetectorConfig;
-using firefly_detection::Det;
+using multi_camera_rig_detection::Yolov8Detector;
+using multi_camera_rig_detection::Yolov8DetectorConfig;
+using multi_camera_rig_detection::Det;
 
 class Yolov8TrtNode : public rclcpp::Node
 {
