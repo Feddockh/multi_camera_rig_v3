@@ -88,7 +88,7 @@ def launch_setup(context, *args, **kwargs):
     
     for cam_name in camera_names:
         rectify_scale_node = Node(
-            package='firefly-ros2-wrapper-reconstruction',
+            package='multi_camera_rig_reconstruction',
             executable='stereo_rectify_scale_node',
             name=f'{cam_name}_rectify_scale',
             output='screen',
@@ -118,7 +118,7 @@ def launch_setup(context, *args, **kwargs):
     if save_dir:  # Only launch if save_directory is provided
         for cam_name in camera_names:
             image_saver_node = Node(
-                package='firefly-ros2-wrapper-bringup',
+                package='multi_camera_rig_bringup',
                 executable='image_saver_node',
                 name=f'{cam_name}_image_saver',
                 output='screen',
@@ -148,7 +148,7 @@ def launch_setup(context, *args, **kwargs):
         launch_nodes.append(joy_node)
         
         joy_trigger_node = Node(
-            package='firefly-ros2-wrapper-bringup',
+            package='multi_camera_rig_trigger',
             executable='joy_trigger_node',
             name='joy_trigger_node',
             output='screen',
