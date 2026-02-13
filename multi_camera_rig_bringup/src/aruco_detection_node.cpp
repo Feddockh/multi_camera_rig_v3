@@ -504,6 +504,8 @@ namespace multi_camera_rig_bringup
 
             file << "# ArUco Marker Positions\n";
             file << "# Generated at: " << this->now().seconds() << "\n";
+            file << "# Reference frame: " << map_frame_ << "\n";
+            file << "frame_id: " << map_frame_ << "\n";
             file << "markers:\n";
 
             for (const auto &[id, tracker] : marker_trackers_)
