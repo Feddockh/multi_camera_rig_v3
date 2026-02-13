@@ -1,116 +1,228 @@
 # Multi Camera Rig V3
 
-This repository contains the ROS2 packages for the multi-camera rig system.
+ROS2 packages for a modular multi-camera stereo vision system with AI-powered detection and 3D reconstruction.
 
 ## Repository Structure
 
-- `multi_camera_rig_description/` - URDF and visualization configuration for the multi-camera rig
-- `camera_ros2_wrappers/` - ROS2 wrapper packages for various cameras
-  - `firefly-ros2-wrapper/` - FLIR Firefly camera wrapper
-  - `ximea-ros2-wrapper/` - Ximea camera wrapper
-  - `zed-ros2-wrapper/` - Stereolabs ZED camera wrapper (submodule)
-- `external/` - External dependencies and tools
-  - `FoundationStereo/` - Zero-shot stereo matching foundation model (submodule)
+```
+multi_camera_rig_v3/
+├── multi_camera_rig_bringup/          # Main launch orchestration
+├── multi_camera_rig_common/           # Shared TensorRT runner & QoS utilities
+├── multi_camera_rig_detection/        # Generalizable YOLO detection
+├── multi_camera_rig_reconstruction/   # Generalizable stereo reconstruction
+├── multi_camera_rig_trigger/          # Video trigger control
+├── multi_camera_rig_description/      # URDF and visualization
+├── multi_camera_rig_cameras/
+│   ├── firefly-ros2-wrapper/          # FLIR Firefly stereo camera
+│   │   └── flir_camera_driver/        # (submodule)
+│   ├── ximea-ros2-wrapper/            # Ximea camera
+│   └── zed-ros2-wrapper/              # (submodule) Stereolabs ZED
+└── external/
+    └── FoundationStereo/              # (submodule) Zero-shot stereo model
+```
 
 ## Git Submodules
 
-This repository uses git submodules to manage external dependencies:
-- **zed-ros2-wrapper**: [stereolabs/zed-ros2-wrapper](https://github.com/stereolabs/zed-ros2-wrapper)
+This repository uses three submodules:
 - **flir_camera_driver**: [ros-drivers/flir_camera_driver](https://github.com/ros-drivers/flir_camera_driver)
-- **FoundationStereo**: [NVlabs/FoundationStereo](https://github.com/NVlabs/FoundationStereo) - Zero-shot stereo matching foundation model
+- **zed-ros2-wrapper**: [stereolabs/zed-ros2-wrapper](https://github.com/stereolabs/zed-ros2-wrapper)
+- **FoundationStereo**: [NVlabs/FoundationStereo](https://github.com/NVlabs/FoundationStereo)
 
-### Cloning this Repository
-
-When cloning this repository for the first time, use:
-
-```bash
-git clone --recurse-submodules <your-repo-url>
-```
-
-Or if you've already cloned without submodules:
+### Cloning
 
 ```bash
-git clone <your-repo-url>
-cd multi_camera_rig_v3
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Feddockh/multi_camera_rig_v3.git
+
+# Or if already cloned
 git submodule update --init --recursive
 ```
 
 ### Updating Submodules
 
-To update the submodules to their latest versions:
-
 ```bash
-# Update all submodules to the latest commit on their tracked branch
+# Update all submodules
 git submodule update --remote
 
-# Or update a specific submodule
-git submodule update --remote camera_ros2_wrappers/zed-ros2-wrapper
-git submodule update --remote camera_ros2_wrappers/firefly-ros2-wrapper/flir_camera_driver
+# Update specific submodule
 git submodule update --remote external/FoundationStereo
 
-# After updating, commit the changes
+# Commit changes
 git add .
 git commit -m "Update submodules"
-git push
 ```
 
-### Working with Submodules
+## Setup
 
-To pull the latest changes including submodules:
+### 1. Build ROS2 Packages
 
 ```bash
-git pull --recurse-submodules
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
 ```
 
-## FoundationStereo Setup
+### 2. FoundationStereo Model Setup
 
-FoundationStereo is a zero-shot stereo matching foundation model that provides robust depth estimation from stereo camera pairs without requiring per-domain fine-tuning.
+**Download Pre-trained Weights:**
+- [ViT-Large (23-51-11)](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf) - Best accuracy
+- [ViT-Small (11-33-40)](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf) - Faster inference
 
-### Conda Environment Setup
+Place in: `external/FoundationStereo/pretrained_models/`
 
-The FoundationStereo model requires its own conda environment with specific dependencies. There is a environment.yml file within the repo which came with the FoundationStereo (Python 11), but if you want functionality with ROS2 then you may want to use the environment_ros2.yml (Python 10) in the top-level of this repository.
+**Setup Conda Environment:**
+```bash
+cd external/FoundationStereo
+conda env create -f environment_ros2.yml  # Python 3.10 for ROS2 compatibility
+conda activate foundation_stereo_ros2
+```
 
-### Download Model Weights
+### 3. Model Conversion Pipeline
 
-Download one of the pre-trained models and place it in `external/FoundationStereo/pretrained_models/`:
-
-- **[23-51-11](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf?usp=sharing)** (Recommended) - Best performing model, based on ViT-large
-- **[11-33-40](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf?usp=sharing)** - Faster inference with slightly lower accuracy, based on ViT-small
-
-The ViT-small model is much faster for inferencing, so I might recommend that one if you plan to try ROS implementation.
-
-### TensorRT Integration for ROS2
-
-For production use with ROS2, you'll want to convert the FoundationStereo model to TensorRT for optimized inference. This is especially important for real-time stereo matching applications.
-
-**See the detailed TensorRT setup guide:**
-- [`camera_ros2_wrappers/firefly-ros2-wrapper/firefly-ros2-wrapper-bringup/tools/README.md`](camera_ros2_wrappers/firefly-ros2-wrapper/firefly-ros2-wrapper-bringup/tools/README.md)
-
-This guide covers:
-- Hardware requirements for TensorRT conversion
-- ONNX export configuration
-- TensorRT conversion for ROS2 integration
-- Running the optimized model with the Firefly stereo camera node
-
-## Building
-
-Build the packages using colcon:
+**Convert PyTorch → ONNX → TensorRT**
 
 ```bash
-cd /path/to/ros2_ws
-colcon build --packages-select multi_camera_rig_description firefly-ros2-wrapper-bringup firefly-ros2-wrapper-description ximea-ros2-wrapper-bringup ximea-ros2-wrapper-description
+# Step 1: Export PyTorch to ONNX
+cd external/FoundationStereo
+python tools/export_onnx.py \
+  --model pretrained_models/23-51-11/model.pth \
+  --output foundation_stereo_1088x1440.onnx \
+  --height 1088 --width 1440
+
+# Step 2: Build TensorRT tool
+cd ../../multi_camera_rig_common/tools
+./build_tool.sh
+
+# Step 3: Convert ONNX to TensorRT (auto mode for stereo models)
+./make_tensorrt \
+  foundation_stereo_1088x1440.onnx \
+  foundation_stereo_1088x1440.plan
+
+# For YOLO models (with explicit shape override):
+yolo export model=/path/to/best.pt \
+    format=onnx \
+    imgsz=1088,1440 \
+    opset=17 \
+    simplify=True \
+    dynamic=False \
+    nms=False
+
+./make_tensorrt yolov8n.onnx yolov8n_1088x1440.plan \
+  --min=1x3x1088x1440 --opt=1x3x1088x1440 --max=1x3x1088x1440
 ```
 
-## Setup Instructions
+**Place Models:**
+- Detection: `multi_camera_rig_detection/models/*.plan`
+- Stereo: `multi_camera_rig_reconstruction/models/*.plan`
 
-### ROS2 Packages
+## Running the System
 
-1. Clone this repository into your ROS2 workspace
-2. Initialize and update submodules (see Git Submodules section above)
-3. Install dependencies for each camera driver as per their respective documentation
-4. Build the workspace
-5. Source the setup file: `source install/setup.bash`
-6. If you intend to use the Foundation Stereo model for stereo matching you will need to follow the steps to set up the TensorRT model.
+### Quick Start
+
+**Full Pipeline (Real Hardware):**
+```bash
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py
+```
+
+**Full Pipeline (Simulation):**
+```bash
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_gazebo:=true
+```
+
+**With Visualization:**
+```bash
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_rviz:=true
+```
+
+### Camera Only
+
+**Real Hardware:**
+```bash
+ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py
+```
+
+**Simulation:**
+```bash
+ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py use_gazebo:=true
+```
+
+### Configuration Options
+
+```bash
+# Disable detection (reconstruction only)
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py enable_detection:=false
+
+# Non-semantic pointcloud
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_semantics:=false
+
+# Custom resolution
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
+  output_width:=896 output_height:=672
+
+# Custom models
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
+  detection_model_trt:=custom.plan \
+  stereo_matcher_model_trt:=custom_stereo.plan
+
+# ArUco ground truth generation
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py detect_markers:=true
+```
+
+## Key Topics
+
+### Camera
+- `/firefly_left/image_raw` - Raw left image
+- `/firefly_right/image_raw` - Raw right image
+- `/firefly_left/camera_info` - Camera calibration
+
+### Detection
+- `/firefly_left/detections` - YOLO detections
+
+### Reconstruction
+- `/firefly_left/disparity` - Stereo disparity map
+- `/firefly_left/points2` - Semantic pointcloud
+- `/firefly_left/depth` - Depth image
+
+## Utility Nodes
+
+### QoS Republisher
+```bash
+ros2 run multi_camera_rig_bringup qos_republisher_node --ros-args \
+  -p in_topic:=/camera/image_raw -p out_topic:=/camera/image_be \
+  -p sub_qos.reliability:=reliable -p pub_qos.reliability:=best_effort
+```
+
+### Image Saver
+```bash
+ros2 run multi_camera_rig_bringup image_saver_node --ros-args \
+  -p image_topic:=/firefly_left/image_rect \
+  -p save_directory:=~/saved_images
+```
+
+### Joystick Trigger
+```bash
+ros2 run joy joy_node  # Publish /joy
+ros2 run multi_camera_rig_trigger joy_trigger_node  # Map buttons to triggers
+```
+
+## Troubleshooting
+
+**Cannot find package:**
+```bash
+source ~/ros2_ws/install/setup.bash
+```
+
+**TensorRT engine not found:**
+```bash
+ls multi_camera_rig_detection/models/
+ls multi_camera_rig_reconstruction/models/
+```
+
+**No camera detected:**
+```bash
+ls /dev/video*
+# May need: sudo usermod -a -G video $USER
+```
 
 ## License
 
