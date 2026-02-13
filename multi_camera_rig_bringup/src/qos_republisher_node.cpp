@@ -1,4 +1,4 @@
-]633;E;git commit -m "Added controller trigger node to the trigger package.";b94f454c-51cc-4814-a680-5feb2a77d27e]633;C/*
+/*
 Examples
 Best effort --> Reliable
 ros2 run firefly-ros2-wrapper-bringup qos_republisher_node --ros-args \
