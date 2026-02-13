@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'trigger_node = multi_camera_rig_trigger.trigger_node:main',
             'trigger_node_fake = multi_camera_rig_trigger.trigger_node_fake:main',
+            'joy_trigger_node = multi_camera_rig_trigger.joy_trigger_node:main',
         ],
     },
 )

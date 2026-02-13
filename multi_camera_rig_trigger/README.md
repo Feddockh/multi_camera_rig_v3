@@ -10,6 +10,7 @@ ROS 2 Python package for hardware trigger control in the multi-camera rig system
 - **Continuous Recording**: Start/stop continuous trigger sequences
 - **Flash Duration Control**: Set flash duration (0-300 ms)
 - **Frame Rate Control**: Set trigger frequency (1-20 Hz)
+- **Joystick Control**: Trigger video with gamepad/joystick buttons
 - **ROS 2 Services**: Control via service calls
 - **GUI Integration**: Responds to director topic commands
 - **Parameter Management**: Dynamic parameter updates
@@ -194,6 +195,40 @@ success, msg = trigger.stop_video()
 
 # Close connection
 trigger.close_connection()
+```
+
+## Troubleshooting
+
+### Joystick/Gamepad Control
+
+Control video triggering using a gamepad (Xbox controller):
+
+**Run joy node and joy_trigger_node:**
+```bash
+# Terminal 1: Start joy node (publishes /joy topic)
+ros2 run joy joy_node
+
+# Terminal 2: Start joy trigger node
+ros2 run multi_camera_rig_trigger joy_trigger_node
+```
+
+**Or use with main trigger launch:**
+```bash
+ros2 launch multi_camera_rig_trigger trigger.launch.py use_joy:=true
+```
+
+**Button mapping (Xbox controller):**
+- **A button**: Toggle video recording (press to start, release to stop)
+
+**Custom button mapping:**
+```bash
+ros2 run multi_camera_rig_trigger joy_trigger_node --ros-args \
+  -p trigger_button:=1  # Use B button (index 1) instead
+```
+
+**Test joystick input:**
+```bash
+ros2 topic echo /joy
 ```
 
 ## Troubleshooting
