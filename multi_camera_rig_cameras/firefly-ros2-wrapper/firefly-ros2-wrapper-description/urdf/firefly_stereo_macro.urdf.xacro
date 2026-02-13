@@ -5,7 +5,7 @@
     <xacro:include filename="$(find firefly-ros2-wrapper-description)/urdf/firefly_stereo_gazebo.urdf.xacro"/>
 
     <!-- Macro Definition -->
-    <xacro:macro name="firefly_camera" params="use_gazebo:=true namespace:=firefly">
+    <xacro:macro name="firefly_camera" params="use_gazebo:=true namespace:=firefly frame_rate:=5">
 
         <!-- Link: camera body -->
         <link name="firefly_camera_link">
@@ -63,7 +63,7 @@
 
         <!-- Add Gazebo sensor plugins if in simulation -->
         <xacro:if value="${use_gazebo}">
-            <xacro:firefly_camera_gazebo namespace="${namespace}"/>
+            <xacro:firefly_camera_gazebo namespace="${namespace}" frame_rate="${frame_rate}"/>
         </xacro:if>
 
     </xacro:macro>

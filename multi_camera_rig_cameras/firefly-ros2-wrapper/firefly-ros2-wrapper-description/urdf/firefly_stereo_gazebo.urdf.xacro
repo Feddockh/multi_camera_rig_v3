@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
     <!-- Gazebo (Ignition) sensor plugins for Firefly stereo camera -->
-    <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly">
+    <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly frame_rate:=5">
 
         <!-- Sensors plugin required for Ignition Gazebo camera simulation -->
         <!-- We added this in the .sdf file for the world, but it can also be added here -->
@@ -11,7 +11,7 @@
         <gazebo reference="firefly_left_camera_frame">
 
             <sensor name="firefly_left_depth_camera" type="depth">
-                <update_rate>5</update_rate>
+                <update_rate>${frame_rate}</update_rate>
                 <visualize>false</visualize>
                 <topic>/firefly_left/sim/depth/image_raw</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
@@ -31,7 +31,7 @@
             </sensor>
 
             <sensor name="firefly_left_camera" type="camera">
-                <update_rate>5</update_rate>
+                <update_rate>${frame_rate}</update_rate>
                 <visualize>false</visualize>
                 <topic>/firefly_left/sim/image_raw</topic>
                 <ignition_frame_id>firefly_left_camera_optical_frame</ignition_frame_id>
@@ -63,7 +63,7 @@
         <gazebo reference="firefly_right_camera_frame">
 
             <sensor name="firefly_right_depth_camera" type="depth">
-                <update_rate>5</update_rate>
+                <update_rate>${frame_rate}</update_rate>
                 <visualize>false</visualize>
                 <topic>/firefly_right/sim/depth/image_raw</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
@@ -83,7 +83,7 @@
             </sensor>
 
             <sensor name="firefly_right_camera" type="camera">
-                <update_rate>5</update_rate>
+                <update_rate>${frame_rate}</update_rate>
                 <visualize>false</visualize>
                 <topic>/firefly_right/sim/image_raw</topic>
                 <ignition_frame_id>firefly_right_camera_optical_frame</ignition_frame_id>
