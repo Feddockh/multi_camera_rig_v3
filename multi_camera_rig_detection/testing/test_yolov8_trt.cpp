@@ -1,34 +1,32 @@
 /*
 Standalone TensorRT YOLOv8 tester (no ROS required)
 
-Build:
-  g++ -O3 -o test_yolov8_trt test_yolov8_trt.cpp \
-    -I/usr/local/cuda/include \
-    -L/usr/local/cuda/lib64 \
-    -lnvinfer -lcudart \
-    $(pkg-config --cflags --libs opencv4) \
-    -std=c++17
+Build (as part of ROS2 workspace):
+  This file will be built as part of the multi_camera_rig_detection package.
+  It links against multi_camera_rig_common for TrtRunner.
 
 Run:
-  ./test_yolov8_trt /path/to/model.plan /path/to/image.jpg [conf_thresh] [iou_thresh] [max_det] [debug]
+  ros2 run multi_camera_rig_detection test_yolov8_trt /path/to/model.plan /path/to/image.jpg [conf_thresh] [iou_thresh] [max_det] [debug]
+
+Example:
+  ros2 run multi_camera_rig_detection test_yolov8_trt ~/models/yolov8n.plan ~/test_images/sample.jpg 0.3 0.45 100 1
 
 Notes:
 - Supports TRT outputs shaped (1, 4+nc, N) where the first 4 channels are (cx,cy,w,h) in letterboxed coords,
   followed by nc class scores. The best class score is used as confidence.
-- If your TRT output shape is (1,6,N) and nc=2, this matches your current engine.
+- Now uses multi_camera_rig_common::TrtRunner with multi-tensor API matching yolov8_detector.cpp
 */
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/dnn/dnn.hpp>
 
+#include "multi_camera_rig_common/trt_runner.hpp"
 #include <NvInfer.h>
-#include <cuda_runtime.h>
 
 #include <algorithm>
 #include <cmath>
 #include <chrono>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -41,86 +39,6 @@ Notes:
 
 namespace
 {
-
-    inline void checkCuda(cudaError_t e, const char *msg)
-    {
-        if (e != cudaSuccess)
-        {
-            throw std::runtime_error(std::string(msg) + ": " + cudaGetErrorString(e));
-        }
-    }
-
-    class TrtLogger final : public nvinfer1::ILogger
-    {
-    public:
-        void log(Severity severity, const char *msg) noexcept override
-        {
-            if (severity <= Severity::kWARNING)
-            {
-                std::cerr << "[TRT] " << msg << "\n";
-            }
-        }
-    };
-
-    std::vector<char> readFile(const std::string &path)
-    {
-        std::ifstream f(path, std::ios::binary);
-        if (!f)
-            throw std::runtime_error("Failed to open file: " + path);
-        f.seekg(0, std::ios::end);
-        const size_t n = static_cast<size_t>(f.tellg());
-        f.seekg(0, std::ios::beg);
-        std::vector<char> data(n);
-        f.read(data.data(), n);
-        return data;
-    }
-
-    const char *dtypeToStr(nvinfer1::DataType t)
-    {
-        switch (t)
-        {
-        case nvinfer1::DataType::kFLOAT:
-            return "kFLOAT";
-        case nvinfer1::DataType::kHALF:
-            return "kHALF";
-        case nvinfer1::DataType::kINT8:
-            return "kINT8";
-        case nvinfer1::DataType::kINT32:
-            return "kINT32";
-        case nvinfer1::DataType::kBOOL:
-            return "kBOOL";
-        default:
-            return "UNKNOWN";
-        }
-    }
-
-    size_t dtypeBytes(nvinfer1::DataType t)
-    {
-        switch (t)
-        {
-        case nvinfer1::DataType::kFLOAT:
-            return 4;
-        case nvinfer1::DataType::kHALF:
-            return 2;
-        case nvinfer1::DataType::kINT8:
-            return 1;
-        case nvinfer1::DataType::kINT32:
-            return 4;
-        case nvinfer1::DataType::kBOOL:
-            return 1;
-        default:
-            return 0;
-        }
-    }
-
-    size_t volume(const nvinfer1::Dims &d)
-    {
-        size_t v = 1;
-        for (int i = 0; i < d.nbDims; ++i)
-            v *= static_cast<size_t>(d.d[i]);
-        return v;
-    }
-
     std::string dimsToString(const nvinfer1::Dims &d)
     {
         std::string s = "(";
@@ -132,6 +50,14 @@ namespace
         }
         s += ")";
         return s;
+    }
+
+    size_t volume(const nvinfer1::Dims &d)
+    {
+        size_t v = 1;
+        for (int i = 0; i < d.nbDims; ++i)
+            v *= static_cast<size_t>(d.d[i]);
+        return v;
     }
 
     void printVecStats(const std::string &tag, const float *x, size_t n, size_t sample_stride = 1)
@@ -188,162 +114,6 @@ namespace
         }
         std::cout << "\n";
     }
-
-    struct IoTensor
-    {
-        std::string name;
-        nvinfer1::Dims shape{};
-        nvinfer1::DataType dtype{};
-        void *dptr{nullptr};
-        size_t bytes{0};
-    };
-
-    class TrtRunner
-    {
-    public:
-        TrtRunner(const std::string &engine_path,
-                  std::string input_name,
-                  std::string output_name,
-                  bool debug)
-            : input_name_(std::move(input_name)),
-              output_name_(std::move(output_name)),
-              debug_(debug)
-        {
-            logger_ = std::make_unique<TrtLogger>();
-
-            const auto blob = readFile(engine_path);
-            runtime_.reset(nvinfer1::createInferRuntime(*logger_));
-            if (!runtime_)
-                throw std::runtime_error("createInferRuntime failed");
-
-            engine_.reset(runtime_->deserializeCudaEngine(blob.data(), blob.size()));
-            if (!engine_)
-                throw std::runtime_error("deserializeCudaEngine failed");
-
-            context_.reset(engine_->createExecutionContext());
-            if (!context_)
-                throw std::runtime_error("createExecutionContext failed");
-
-            checkCuda(cudaStreamCreate(&stream_), "cudaStreamCreate");
-
-            const int n = engine_->getNbIOTensors();
-            std::cout << "[INFO] Engine IO tensors (" << n << "):\n";
-            for (int i = 0; i < n; ++i)
-            {
-                const char *tn = engine_->getIOTensorName(i);
-                const auto mode = engine_->getTensorIOMode(tn);
-                const auto shape = engine_->getTensorShape(tn);
-                const auto dtype = engine_->getTensorDataType(tn);
-
-                std::cout << "  - " << tn
-                          << "  mode=" << (mode == nvinfer1::TensorIOMode::kINPUT ? "INPUT" : "OUTPUT")
-                          << "  shape=" << dimsToString(shape)
-                          << "  dtype=" << dtypeToStr(dtype)
-                          << "\n";
-
-                IoTensor t;
-                t.name = tn;
-                t.shape = shape;
-                t.dtype = dtype;
-                t.bytes = volume(t.shape) * dtypeBytes(t.dtype);
-
-                if (debug_)
-                    std::cout << "      bytes=" << t.bytes << "\n";
-
-                checkCuda(cudaMalloc(&t.dptr, t.bytes), ("cudaMalloc " + t.name).c_str());
-                idx_[t.name] = tensors_.size();
-                tensors_.push_back(t);
-            }
-
-            requireTensor(input_name_);
-            requireTensor(output_name_);
-
-            std::cout << "[INFO] Using input tensor:  " << input_name_ << "\n";
-            std::cout << "[INFO] Using output tensor: " << output_name_ << "\n";
-        }
-
-        ~TrtRunner()
-        {
-            for (auto &t : tensors_)
-            {
-                if (t.dptr)
-                    cudaFree(t.dptr);
-            }
-            if (stream_)
-                cudaStreamDestroy(stream_);
-        }
-
-        const std::string &inputName() const { return input_name_; }
-        const std::string &outputName() const { return output_name_; }
-
-        nvinfer1::Dims shapeOf(const std::string &name) const { return tensors_.at(idx_.at(name)).shape; }
-        nvinfer1::DataType dtypeOf(const std::string &name) const { return tensors_.at(idx_.at(name)).dtype; }
-        size_t bytesOf(const std::string &name) const { return tensors_.at(idx_.at(name)).bytes; }
-
-        void run(const float *h_images, size_t images_floats, float *h_output, size_t output_floats)
-        {
-            auto &input = tensors_.at(idx_.at(input_name_));
-            auto &output = tensors_.at(idx_.at(output_name_));
-
-            const size_t in_bytes = images_floats * sizeof(float);
-            const size_t out_bytes = output_floats * sizeof(float);
-
-            if (debug_)
-            {
-                std::cout << "[DBG] H2D input bytes=" << in_bytes << " (engine alloc " << input.bytes << ")"
-                          << " dtype=" << dtypeToStr(input.dtype) << "\n";
-                std::cout << "[DBG] D2H output bytes=" << out_bytes << " (engine alloc " << output.bytes << ")"
-                          << " dtype=" << dtypeToStr(output.dtype) << "\n";
-            }
-
-            if (in_bytes > input.bytes)
-                throw std::runtime_error("input buffer too small for provided input");
-            if (out_bytes > output.bytes)
-                throw std::runtime_error("output buffer too small for provided output");
-
-            checkCuda(cudaMemcpyAsync(input.dptr, h_images, in_bytes, cudaMemcpyHostToDevice, stream_), "H2D input");
-
-            const int n = engine_->getNbIOTensors();
-            for (int i = 0; i < n; ++i)
-            {
-                const char *tn = engine_->getIOTensorName(i);
-                auto &t = tensors_.at(idx_.at(tn));
-                context_->setTensorAddress(tn, t.dptr);
-            }
-
-            if (!context_->enqueueV3(stream_))
-                throw std::runtime_error("enqueueV3 failed");
-
-            checkCuda(cudaMemcpyAsync(h_output, output.dptr, out_bytes, cudaMemcpyDeviceToHost, stream_), "D2H output");
-            checkCuda(cudaStreamSynchronize(stream_), "stream sync");
-        }
-
-    private:
-        void requireTensor(const std::string &name) const
-        {
-            if (!idx_.count(name))
-                throw std::runtime_error("Engine missing tensor: " + name);
-        }
-
-        struct TRTDeleter
-        {
-            template <typename T>
-            void operator()(T *p) const noexcept { delete p; }
-        };
-
-        bool debug_{false};
-        std::unique_ptr<TrtLogger> logger_;
-        std::unique_ptr<nvinfer1::IRuntime, TRTDeleter> runtime_;
-        std::unique_ptr<nvinfer1::ICudaEngine, TRTDeleter> engine_;
-        std::unique_ptr<nvinfer1::IExecutionContext, TRTDeleter> context_;
-        cudaStream_t stream_{};
-
-        std::vector<IoTensor> tensors_;
-        std::unordered_map<std::string, size_t> idx_;
-
-        std::string input_name_;
-        std::string output_name_;
-    };
 
     struct LetterboxInfo
     {
@@ -482,10 +252,10 @@ namespace
             float best_score = -1.0f;
             for (int c = 0; c < nc; ++c)
             {
-                const float s = get(4 + c, i);
-                if (s > best_score)
+                const float score = get(4 + c, i);
+                if (score > best_score)
                 {
-                    best_score = s;
+                    best_score = score;
                     best_cls = c;
                 }
             }
@@ -546,8 +316,8 @@ namespace
 
             for (int j : idxs)
             {
-                b.emplace_back((int)boxes[j].x, (int)boxes[j].y, (int)boxes[j].width, (int)boxes[j].height);
-                s.emplace_back(scores[j]);
+                b.push_back(cv::Rect((int)boxes[j].x, (int)boxes[j].y, (int)boxes[j].width, (int)boxes[j].height));
+                s.push_back(scores[j]);
             }
 
             std::vector<int> keep;
@@ -555,14 +325,14 @@ namespace
 
             for (int k : keep)
             {
-                const int j = idxs[k];
+                const int orig_idx = idxs[k];
                 Det d;
                 d.cls = cls;
-                d.conf = scores[j];
-                d.x1 = boxes[j].x;
-                d.y1 = boxes[j].y;
-                d.x2 = boxes[j].x + boxes[j].width;
-                d.y2 = boxes[j].y + boxes[j].height;
+                d.conf = scores[orig_idx];
+                d.x1 = boxes[orig_idx].x;
+                d.y1 = boxes[orig_idx].y;
+                d.x2 = boxes[orig_idx].x + boxes[orig_idx].width;
+                d.y2 = boxes[orig_idx].y + boxes[orig_idx].height;
                 out_dets.push_back(d);
             }
         }
@@ -585,18 +355,22 @@ namespace
             const int C = (int)out_dims.d[1];
             const int N = (int)out_dims.d[2];
             for (int c = 0; c < std::min(C, 8); ++c)
-            { // cap spam
-                const float *p = output.data() + (size_t)c * (size_t)N;
-                printVecStats("out[" + std::to_string(c) + "]", p, N, std::max(1, N / 12));
+            {
+                const float *chan = output.data() + (size_t)c * (size_t)N;
+                printVecStats("  chan_" + std::to_string(c), chan, N, std::max(1, N / 10));
             }
 
             // how many pass threshold for "best class score"
             int pass = 0;
             for (int i = 0; i < N; ++i)
             {
-                float best = -1.f;
-                for (int c = 4; c < C; ++c)
-                    best = std::max(best, output[(size_t)c * (size_t)N + (size_t)i]);
+                float best = -1.0f;
+                for (int c = 0; c < (C - 4); ++c)
+                {
+                    float score = output[(4 + c) * N + i];
+                    if (score > best)
+                        best = score;
+                }
                 if (best >= conf_thresh)
                     pass++;
             }
@@ -629,9 +403,9 @@ int main(int argc, char **argv)
     try
     {
         std::cout << "Loading engine: " << engine_path << "\n";
-        TrtRunner runner(engine_path, input_tensor, output_tensor, debug);
+        auto runner = std::make_unique<multi_camera_rig_common::TrtRunner>(engine_path, true);
 
-        const auto in = runner.shapeOf(runner.inputName());
+        const auto in = runner->shapeOf(input_tensor);
         if (in.nbDims != 4 || in.d[0] != 1 || in.d[1] != 3)
         {
             throw std::runtime_error("Expected input shape (1,3,H,W), got " + dimsToString(in));
@@ -641,9 +415,8 @@ int main(int argc, char **argv)
         const int input_w = (int)in.d[3];
         std::cout << "Model input size: " << input_w << "x" << input_h << " (WxH)\n";
 
-        const auto out_dims = runner.shapeOf(runner.outputName());
-        std::cout << "Model output dims: " << dimsToString(out_dims)
-                  << " dtype=" << dtypeToStr(runner.dtypeOf(runner.outputName())) << "\n";
+        const auto out_dims = runner->shapeOf(output_tensor);
+        std::cout << "Model output dims: " << dimsToString(out_dims) << "\n";
 
         const size_t out_floats = volume(out_dims);
         const size_t in_floats = (size_t)1 * 3 * (size_t)input_h * (size_t)input_w;
@@ -680,7 +453,11 @@ int main(int argc, char **argv)
         auto t1 = std::chrono::high_resolution_clock::now();
 
         std::vector<float> output(out_floats, 0.0f);
-        runner.run(input_nchw.data(), in_floats, output.data(), out_floats);
+        
+        // Run inference using new multi-tensor API
+        multi_camera_rig_common::TensorSpec input_spec{input_tensor, input_nchw.data(), nullptr, in_floats};
+        multi_camera_rig_common::TensorSpec output_spec{output_tensor, nullptr, output.data(), out_floats};
+        runner->run({input_spec}, {output_spec});
 
         auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -724,9 +501,9 @@ int main(int argc, char **argv)
             oss << "cls:" << d.cls << " " << std::fixed << std::setprecision(2) << d.conf;
             const std::string label = oss.str();
 
-            cv::putText(vis, label,
-                        cv::Point((int)d.x1, std::max(0, (int)d.y1 - 5)),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
+            cv::putText(vis, label, cv::Point((int)d.x1, std::max(0, (int)d.y1 - 5)),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::Scalar(0, 255, 0), 2);
         }
 
         const std::string out_path = "output_detections.jpg";

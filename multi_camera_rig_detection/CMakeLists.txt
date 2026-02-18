@@ -54,10 +54,26 @@ ament_target_dependencies(yolov8_trt_node
   vision_msgs
 )
 
+# Test executable (standalone TensorRT tester, no ROS dependencies)
+add_executable(test_yolov8_trt testing/test_yolov8_trt.cpp)
+
+target_compile_features(test_yolov8_trt PUBLIC cxx_std_17)
+
+target_link_libraries(test_yolov8_trt
+  multi_camera_rig_common::trt_runner
+  ${OpenCV_LIBS}
+)
+
+ament_target_dependencies(test_yolov8_trt
+  multi_camera_rig_common
+  OpenCV
+)
+
 # Install
 install(TARGETS
   yolov8_detector
   yolov8_trt_node
+  test_yolov8_trt
   EXPORT ${PROJECT_NAME}_Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

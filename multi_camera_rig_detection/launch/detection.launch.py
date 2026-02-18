@@ -60,11 +60,6 @@ def launch_setup(context, *args, **kwargs):
             # Debug
             'debug': LaunchConfiguration('debug'),
         }],
-        # Optional: if you want topic remaps rather than params
-        # remappings=[
-        #     ('/image', LaunchConfiguration('yolo_image_topic')),
-        #     ('/detections', LaunchConfiguration('yolo_detections_topic')),
-        # ],
         arguments=['--ros-args', '--log-level', 'info'],
     )
 
