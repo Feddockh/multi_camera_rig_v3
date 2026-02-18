@@ -3,6 +3,7 @@
 
 #include "multi_camera_rig_common/trt_runner.hpp"
 #include "multi_camera_rig_detection/detection_utils.hpp"
+
 #include <opencv2/core.hpp>
 #include <memory>
 #include <string>
@@ -12,14 +13,20 @@ namespace multi_camera_rig_detection
 {
 
 /**
- * @brief YOLOv8 detector configuration
+ * @brief YOLO detector configuration (detection + optional segmentation)
  */
 struct Yolov8DetectorConfig
 {
-    // Model parameters
+    // Engine + tensors
     std::string engine_path;
     std::string input_tensor{"images"};
     std::string output_tensor{"output0"};
+
+    // Optional segmentation proto tensor
+    std::string proto_tensor{"output1"};
+
+    // Task control: "auto" | "det" | "seg"
+    std::string task{"auto"};
 
     // Input dimensions
     int input_w{1440};
@@ -31,55 +38,51 @@ struct Yolov8DetectorConfig
     double conf_thresh{0.25};
     double iou_thresh{0.45};
     int max_det{300};
+
+    // Segmentation parameters
+    int mask_dim{32};          // typical
 };
 
 /**
- * @brief YOLOv8 object detector using TensorRT
+ * @brief YOLO (v8+ style) detector using TensorRT. Supports:
+ *   - detection engines with output (1,C,N)
+ *   - segmentation engines with output0 (1,N,C) and proto output1 (1,mask_dim,Hp,Wp)
  */
 class Yolov8Detector
 {
 public:
-    /**
-     * @brief Construct detector with configuration
-     * @param config Detector configuration
-     */
     explicit Yolov8Detector(const Yolov8DetectorConfig &config);
     ~Yolov8Detector() = default;
 
-    /**
-     * @brief Run detection on BGR image
-     * @param bgr Input BGR image
-     * @param dets Output detections
-     */
     void detect(const cv::Mat &bgr, std::vector<Det> &dets);
 
-    /**
-     * @brief Scale detections to a different resolution
-     * @param dets Input detections (in original resolution)
-     * @param scale_x X scale factor (output_width / input_width)
-     * @param scale_y Y scale factor (output_height / input_height)
-     * @param dets_scaled Output scaled detections
-     */
     static void scaleDetections(const std::vector<Det> &dets,
-                                  double scale_x, double scale_y,
-                                  std::vector<Det> &dets_scaled);
+                                double scale_x, double scale_y,
+                                std::vector<Det> &dets_scaled);
 
-    /**
-     * @brief Get letterbox info from last detection
-     * @return Letterbox transformation info
-     */
     const LetterboxInfo &getLetterboxInfo() const { return lb_info_; }
+
+    bool isSegmentation() const { return is_segmentation_; }
+    const std::vector<float> &proto() const { return proto_output_; }
+    const TensorDims &protoShape() const { return proto_shape_; }
 
 private:
     Yolov8DetectorConfig config_;
     std::unique_ptr<multi_camera_rig_common::TrtRunner> runner_;
-    
+
     size_t input_floats_{0};
     size_t out_floats_{0};
+    size_t proto_floats_{0};
+
     std::vector<float> input_nchw_;
     std::vector<float> output_;
-    
+    std::vector<float> proto_output_;
+
     LetterboxInfo lb_info_;
+
+    bool is_segmentation_{false};
+    TensorDims out_shape_{};
+    TensorDims proto_shape_{};
 };
 
 } // namespace multi_camera_rig_detection

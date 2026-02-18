@@ -166,6 +166,12 @@ def launch_setup(context, *args, **kwargs):
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
+                # Segmentation support
+                'proto_tensor': 'output1',
+                'task': 'auto',          # set to 'seg' for yolo26-seg engine; 'det' for detection
+                'debug_masks': True,
+                'mask_alpha': 0.45,
+                'mask_thresh': 0.50,
                 # Debug
                 'debug': True,
             }],
