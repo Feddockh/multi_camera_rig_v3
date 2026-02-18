@@ -1,4 +1,4 @@
-#include "multi_camera_rig_detection/yolov8_detector.hpp"
+#include "multi_camera_rig_detection/yolo_detector.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -16,7 +16,7 @@ static TensorDims convertDims(const nvinfer1::Dims &in)
     return out;
 }
 
-Yolov8Detector::Yolov8Detector(const Yolov8DetectorConfig &config)
+YoloDetector::YoloDetector(const YoloDetectorConfig &config)
     : config_(config)
 {
     runner_ = std::make_unique<multi_camera_rig_common::TrtRunner>(config_.engine_path, true);
@@ -64,7 +64,7 @@ Yolov8Detector::Yolov8Detector(const Yolov8DetectorConfig &config)
     }
 }
 
-void Yolov8Detector::detect(const cv::Mat &bgr, std::vector<Det> &dets)
+void YoloDetector::detect(const cv::Mat &bgr, std::vector<Det> &dets)
 {
     // Letterbox
     cv::Mat lb_img = letterbox(bgr,
@@ -135,7 +135,7 @@ void Yolov8Detector::detect(const cv::Mat &bgr, std::vector<Det> &dets)
                                config_.max_det, dets);
 }
 
-void Yolov8Detector::scaleDetections(const std::vector<Det> &dets,
+void YoloDetector::scaleDetections(const std::vector<Det> &dets,
                                      double scale_x, double scale_y,
                                      std::vector<Det> &dets_scaled)
 {

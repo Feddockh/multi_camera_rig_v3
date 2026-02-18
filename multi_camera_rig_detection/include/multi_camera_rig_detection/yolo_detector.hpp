@@ -1,5 +1,5 @@
-#ifndef MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP
-#define MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP
+#ifndef MULTI_CAMERA_RIG_DETECTION_YOLO_DETECTOR_HPP
+#define MULTI_CAMERA_RIG_DETECTION_YOLO_DETECTOR_HPP
 
 #include "multi_camera_rig_common/trt_runner.hpp"
 #include "multi_camera_rig_detection/detection_utils.hpp"
@@ -15,7 +15,7 @@ namespace multi_camera_rig_detection
 /**
  * @brief YOLO detector configuration (detection + optional segmentation)
  */
-struct Yolov8DetectorConfig
+struct YoloDetectorConfig
 {
     // Engine + tensors
     std::string engine_path;
@@ -48,11 +48,11 @@ struct Yolov8DetectorConfig
  *   - detection engines with output (1,C,N)
  *   - segmentation engines with output0 (1,N,C) and proto output1 (1,mask_dim,Hp,Wp)
  */
-class Yolov8Detector
+class YoloDetector
 {
 public:
-    explicit Yolov8Detector(const Yolov8DetectorConfig &config);
-    ~Yolov8Detector() = default;
+    explicit YoloDetector(const YoloDetectorConfig &config);
+    ~YoloDetector() = default;
 
     void detect(const cv::Mat &bgr, std::vector<Det> &dets);
 
@@ -67,7 +67,7 @@ public:
     const TensorDims &protoShape() const { return proto_shape_; }
 
 private:
-    Yolov8DetectorConfig config_;
+    YoloDetectorConfig config_;
     std::unique_ptr<multi_camera_rig_common::TrtRunner> runner_;
 
     size_t input_floats_{0};
@@ -87,4 +87,4 @@ private:
 
 } // namespace multi_camera_rig_detection
 
-#endif // MULTI_CAMERA_RIG_DETECTION_YOLOV8_DETECTOR_HPP
+#endif // MULTI_CAMERA_RIG_DETECTION_YOLO_DETECTOR_HPP

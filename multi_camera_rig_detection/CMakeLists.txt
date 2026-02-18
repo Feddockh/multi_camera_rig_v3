@@ -14,39 +14,39 @@ find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(vision_msgs REQUIRED)
 
-# Yolov8 Detector Library
-add_library(yolov8_detector SHARED
-  src/yolov8_detector.cpp
+# YOLO Detector Library (supports YOLOv8, YOLOv11, segmentation, etc.)
+add_library(yolo_detector SHARED
+  src/yolo_detector.cpp
 )
 
-target_compile_features(yolov8_detector PUBLIC cxx_std_17)
+target_compile_features(yolo_detector PUBLIC cxx_std_17)
 
-target_include_directories(yolov8_detector PUBLIC
+target_include_directories(yolo_detector PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(yolov8_detector
+target_link_libraries(yolo_detector
   multi_camera_rig_common::trt_runner  # This brings TensorRT transitively
   ${OpenCV_LIBS}
 )
 
-ament_target_dependencies(yolov8_detector
+ament_target_dependencies(yolo_detector
   multi_camera_rig_common
   OpenCV
 )
 
 # YOLO Detection Node
-add_executable(yolov8_trt_node src/yolov8_trt_node.cpp)
+add_executable(yolo_trt_node src/yolo_trt_node.cpp)
 
-target_compile_features(yolov8_trt_node PUBLIC cxx_std_17)
+target_compile_features(yolo_trt_node PUBLIC cxx_std_17)
 
-target_link_libraries(yolov8_trt_node
-  yolov8_detector
+target_link_libraries(yolo_trt_node
+  yolo_detector
   ${OpenCV_LIBS}
 )
 
-ament_target_dependencies(yolov8_trt_node
+ament_target_dependencies(yolo_trt_node
   rclcpp
   sensor_msgs
   cv_bridge
@@ -55,25 +55,25 @@ ament_target_dependencies(yolov8_trt_node
 )
 
 # Test executable (standalone TensorRT tester, no ROS dependencies)
-add_executable(test_yolov8_trt testing/test_yolov8_trt.cpp)
+add_executable(test_yolo_trt testing/test_yolo_trt.cpp)
 
-target_compile_features(test_yolov8_trt PUBLIC cxx_std_17)
+target_compile_features(test_yolo_trt PUBLIC cxx_std_17)
 
-target_link_libraries(test_yolov8_trt
+target_link_libraries(test_yolo_trt
   multi_camera_rig_common::trt_runner
   ${OpenCV_LIBS}
 )
 
-ament_target_dependencies(test_yolov8_trt
+ament_target_dependencies(test_yolo_trt
   multi_camera_rig_common
   OpenCV
 )
 
 # Install
 install(TARGETS
-  yolov8_detector
-  yolov8_trt_node
-  test_yolov8_trt
+  yolo_detector
+  yolo_trt_node
+  test_yolo_trt
   EXPORT ${PROJECT_NAME}_Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

@@ -21,8 +21,8 @@ def launch_setup(context, *args, **kwargs):
 
     yolo_node = Node(
         package='firefly-ros2-wrapper-detection',
-        executable='yolov8_trt_node',
-        name='yolov8_trt_node',
+        executable='yolo_trt_node',
+        name='yolo_trt_node',
         output='screen',
         parameters=[{
             # Core

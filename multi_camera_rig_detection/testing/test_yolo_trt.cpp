@@ -10,16 +10,16 @@ Build (as part of ROS2 workspace):
   It links against multi_camera_rig_common for TrtRunner.
 
 Run:
-  ros2 run multi_camera_rig_detection test_yolov8_trt \
+  ros2 run multi_camera_rig_detection test_yolo_trt \
     /path/to/model.plan /path/to/image.jpg \
     [conf_thresh] [iou_thresh] [max_det] [debug] [mask_thresh] [mask_alpha] [crop_masks]
 
 Examples:
   Detection:
-    ros2 run multi_camera_rig_detection test_yolov8_trt best_sim.plan img.png 0.3 0.45 100 1
+    ros2 run multi_camera_rig_detection test_yolo_trt best_sim.plan img.png 0.3 0.45 100 1
 
   Segmentation (overlay masks):
-    ros2 run multi_camera_rig_detection test_yolov8_trt best_sim_seg.plan img.png 0.3 0.45 100 1 0.5 0.45 1
+    ros2 run multi_camera_rig_detection test_yolo_trt best_sim_seg.plan img.png 0.3 0.45 100 1 0.5 0.45 1
 */
 
 #include <opencv2/imgproc.hpp>

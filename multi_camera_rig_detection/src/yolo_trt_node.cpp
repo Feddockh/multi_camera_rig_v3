@@ -7,7 +7,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc.hpp>
 
-#include "multi_camera_rig_detection/yolov8_detector.hpp"
+#include "multi_camera_rig_detection/yolo_detector.hpp"
 #include "multi_camera_rig_detection/detection_utils.hpp"
 #include "multi_camera_rig_common/qos_utils.hpp"
 
@@ -17,14 +17,14 @@
 #include <string>
 #include <vector>
 
-using multi_camera_rig_detection::Yolov8Detector;
-using multi_camera_rig_detection::Yolov8DetectorConfig;
+using multi_camera_rig_detection::YoloDetector;
+using multi_camera_rig_detection::YoloDetectorConfig;
 using multi_camera_rig_detection::Det;
 
-class Yolov8TrtNode : public rclcpp::Node
+class YoloTrtNode : public rclcpp::Node
 {
 public:
-    Yolov8TrtNode() : Node("yolov8_trt_node")
+    YoloTrtNode() : Node("yolo_trt_node")
     {
         // Core params
         engine_path_ = declare_parameter<std::string>("engine_path", "");
@@ -88,7 +88,7 @@ public:
             throw std::runtime_error("engine_path param is empty");
 
         // Detector config
-        Yolov8DetectorConfig config;
+        YoloDetectorConfig config;
         config.engine_path = engine_path_;
         config.input_tensor = input_tensor_;
         config.output_tensor = output_tensor_;
@@ -103,7 +103,7 @@ public:
         config.max_det = max_det_;
         config.mask_dim = 32;
 
-        detector_ = std::make_unique<Yolov8Detector>(config);
+        detector_ = std::make_unique<YoloDetector>(config);
 
         // QoS
         auto sub_qos = multi_camera_rig_common::makeQos(sub_rel_, sub_dur_, sub_hist_, sub_depth_);
@@ -128,7 +128,7 @@ public:
         // Subscriber
         sub_ = create_subscription<sensor_msgs::msg::Image>(
             image_topic_, sub_qos,
-            std::bind(&Yolov8TrtNode::onImage, this, std::placeholders::_1));
+            std::bind(&YoloTrtNode::onImage, this, std::placeholders::_1));
 
         RCLCPP_INFO(get_logger(),
                     "QoS: sub(reliability=%s durability=%s history=%s depth=%d) pub(reliability=%s durability=%s history=%s depth=%d)",
@@ -273,7 +273,7 @@ private:
             const double scale_y = static_cast<double>(output_height_) / static_cast<double>(orig_height);
 
             std::vector<Det> dets_scaled;
-            Yolov8Detector::scaleDetections(dets, scale_x, scale_y, dets_scaled);
+            YoloDetector::scaleDetections(dets, scale_x, scale_y, dets_scaled);
 
             vision_msgs::msg::Detection2DArray scaled_msg;
             scaled_msg.header = msg->header;
@@ -353,7 +353,7 @@ private:
     std::string det_topic_scaled_alt_{""};
 
     // Detector
-    std::unique_ptr<Yolov8Detector> detector_;
+    std::unique_ptr<YoloDetector> detector_;
 
     // QoS params
     std::string sub_rel_, sub_dur_, sub_hist_;
@@ -371,7 +371,7 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Yolov8TrtNode>());
+    rclcpp::spin(std::make_shared<YoloTrtNode>());
     rclcpp::shutdown();
     return 0;
 }
