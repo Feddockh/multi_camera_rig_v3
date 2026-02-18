@@ -16,6 +16,7 @@ endif()
 # ------------------------
 find_package(ament_cmake REQUIRED)
 find_package(multi_camera_rig_common REQUIRED)
+find_package(multi_camera_rig_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(vision_msgs REQUIRED)
@@ -37,7 +38,7 @@ ament_target_dependencies(stereo_rectify_scale sensor_msgs OpenCV rclcpp)
 
 # SemanticPointCloud library
 add_library(semantic_pointcloud src/semantic_pointcloud.cpp)
-ament_target_dependencies(semantic_pointcloud sensor_msgs vision_msgs cv_bridge OpenCV rclcpp)
+ament_target_dependencies(semantic_pointcloud sensor_msgs vision_msgs cv_bridge OpenCV rclcpp multi_camera_rig_msgs)
 
 # FoundationStereoMatcher library
 add_library(foundation_stereo_matcher src/foundation_stereo_matcher.cpp)
@@ -80,6 +81,7 @@ add_executable(semantic_pointcloud_node src/semantic_pointcloud_node.cpp)
 target_link_libraries(semantic_pointcloud_node semantic_pointcloud)
 ament_target_dependencies(semantic_pointcloud_node
   multi_camera_rig_common
+  multi_camera_rig_msgs
   rclcpp sensor_msgs vision_msgs message_filters
 )
 

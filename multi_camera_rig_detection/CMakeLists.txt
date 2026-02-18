@@ -8,6 +8,7 @@ endif()
 # ROS dependencies
 find_package(ament_cmake REQUIRED)
 find_package(multi_camera_rig_common REQUIRED)
+find_package(multi_camera_rig_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
@@ -38,9 +39,12 @@ ament_target_dependencies(yolo_detector
 
 # YOLO Detection Node
 add_executable(yolo_trt_node src/yolo_trt_node.cpp)
-
 target_compile_features(yolo_trt_node PUBLIC cxx_std_17)
-
+target_include_directories(yolo_trt_node PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${OpenCV_INCLUDE_DIRS}
+)
 target_link_libraries(yolo_trt_node
   yolo_detector
   ${OpenCV_LIBS}
@@ -52,6 +56,8 @@ ament_target_dependencies(yolo_trt_node
   cv_bridge
   OpenCV
   vision_msgs
+  multi_camera_rig_common
+  multi_camera_rig_msgs
 )
 
 # Test executable (standalone TensorRT tester, no ROS dependencies)

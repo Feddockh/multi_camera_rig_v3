@@ -19,8 +19,7 @@ def launch_setup(context, *args, **kwargs):
     """Setup function to configure complete multi-camera rig pipeline."""
     
     launch_nodes = []
-    use_gazebo = LaunchConfiguration('use_gazebo').perform(context).lower() == 'true'
-    
+
     # ============================
     # Camera Bringup
     # ============================
@@ -38,7 +37,7 @@ def launch_setup(context, *args, **kwargs):
             'trigger_baudrate': LaunchConfiguration('trigger_baudrate'),
             'trigger_flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
             'trigger_frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
-            'trigger_auto_connect': LaunchConfiguration('trigger_auto_connect'),
+            'trigger_auto_connect': 'true',
             'trigger_auto_start': LaunchConfiguration('trigger_auto_start'),
         }.items()
     )
@@ -136,26 +135,39 @@ def launch_setup(context, *args, **kwargs):
         
         yolo_node = Node(
             package='multi_camera_rig_detection',
-            executable='yolov8_trt_node',
-            name='yolov8_trt_node',
+            executable='yolo_trt_node',
+            name='yolo_trt_node',
             output='screen',
             parameters=[{
                 # Core
                 'engine_path': engine_path,
                 'image_topic': '/firefly_left/image_rect',
                 'detection_topic': '/firefly_left/detections',
+                'seg_detection_topic': '/firefly_left/instance_segmentation',
+                # Tensors
+                'input_tensor': 'images',
+                'output_tensor': 'output0',
+                'proto_tensor': 'output1',
+                # Task type (auto-detect based on engine, or force 'det' or 'seg')
+                'task': 'seg' if LaunchConfiguration('use_seg_detection').perform(context).lower() == 'true' else 'det',
                 # Model input (engine expects 1088x1440)
-                'input_width': LaunchConfiguration('yolo_input_width'),
-                'input_height': LaunchConfiguration('yolo_input_height'),
-                # Postprocess
-                'conf_thresh': LaunchConfiguration('yolo_conf_thresh'),
-                'iou_thresh': LaunchConfiguration('yolo_iou_thresh'),
-                'max_det': LaunchConfiguration('yolo_max_det'),
+                'input_width': 1440,
+                'input_height': 1088,
+                'stride': 32,
+                'scaleup': True,
                 # Scale settings
                 'scale_output': True,
                 'output_width': output_width,
                 'output_height': output_height,
                 'detection_topic_scaled': '/firefly_left/detections_scaled',
+                'seg_detection_topic_scaled': '/firefly_left/instance_segmentation_scaled',
+                # Postprocess
+                'conf_thresh': 0.5,
+                'iou_thresh': 0.45,
+                'max_det': 300,
+                # Segmentation support
+                'mask_alpha': 0.45,
+                'mask_thresh': 0.50,
                 # QoS subscriber
                 'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
@@ -166,14 +178,9 @@ def launch_setup(context, *args, **kwargs):
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
-                # Segmentation support
-                'proto_tensor': 'output1',
-                'task': 'auto',          # set to 'seg' for yolo26-seg engine; 'det' for detection
-                'debug_masks': True,
-                'mask_alpha': 0.45,
-                'mask_thresh': 0.50,
                 # Debug
                 'debug': True,
+                'debug_masks': True,
             }],
             arguments=['--ros-args', '--log-level', 'info'],
         )
@@ -189,27 +196,29 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{
             # Mode selection
             'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
+            'use_seg_detection': LaunchConfiguration('use_seg_detection').perform(context).lower() == 'true',
             # Stereo parameters
             'baseline': 0.06,
             # Point cloud generation
             'stride': 1,
-            'max_range_m': float(LaunchConfiguration('max_range_m').perform(context)),
-            'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
+            'max_range_m': 5.0,
+            'use_background': True,
             # Input topics
             'disparity_topic': '/firefly_left/disparity',
             'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
             'image_topic': '/firefly_left/image_rect_scaled',
             'detection_topic': '/firefly_left/detections_scaled',
+            'seg_detection_topic': '/firefly_left/instance_segmentation_scaled',
             # Output control
-            'publish_cloud': LaunchConfiguration('publish_cloud').perform(context).lower() == 'true',
-            'publish_depth': LaunchConfiguration('publish_depth').perform(context).lower() == 'true',
+            'publish_cloud': True,
+            'publish_depth': False,
             # Output topics
             'cloud_topic': "/firefly_left/points2",
             'depth_topic': '/firefly_left/depth',
             # Semantic parameters (for semantic mode)
             'background_class_id': -1,
             'background_confidence': 0.5,
-            'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
+            'color_by_class': True,
             # Subscriber QoS settings
             'sub_qos.reliability': 'best_effort',
             'sub_qos.durability': 'volatile',
@@ -282,11 +291,6 @@ def generate_launch_description():
             description='Trigger frame rate in Hz (1-20)'
         ),
         DeclareLaunchArgument(
-            'trigger_auto_connect',
-            default_value='true',
-            description='Automatically test trigger connection on startup'
-        ),
-        DeclareLaunchArgument(
             'trigger_auto_start',
             default_value='true',
             description='Automatically start video triggering on launch'
@@ -306,16 +310,6 @@ def generate_launch_description():
             description='Output height for rectified and scaled images'
         ),
         DeclareLaunchArgument(
-            'max_range_m',
-            default_value='5.0',
-            description='Maximum range for point cloud generation in meters'
-        ),
-        DeclareLaunchArgument(
-            'use_background',
-            default_value='true',
-            description='Create background at max range value for missing depth points'
-        ),
-        DeclareLaunchArgument(
             'stereo_matcher_model_dir',
             default_value=PJoin([FindPackageShare('multi_camera_rig_reconstruction'), 'models']),
             description='Directory containing TensorRT engine (.plan) files',
@@ -326,24 +320,14 @@ def generate_launch_description():
             description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
         ),
         DeclareLaunchArgument(
-            'publish_cloud',
-            default_value='true',
-            description='Publish point cloud output'
-        ),
-        DeclareLaunchArgument(
             'use_semantics',
             default_value='true',
             description='Enable semantic mode with detections for point cloud'
         ),
         DeclareLaunchArgument(
-            'color_by_class',
+            'use_seg_detection',
             default_value='true',
-            description='In semantic mode, color points by class ID instead of RGB image'
-        ),
-        DeclareLaunchArgument(
-            'publish_depth',
-            default_value='false',
-            description='Publish depth image output'
+            description='Use segmentation detections (true) or just bounding boxes (false) for semantic point cloud coloring'
         ),
         
         # ============================
@@ -352,7 +336,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'enable_detection', 
             default_value='true',
-            description='Enable YOLOv8 detection node'
+            description='Enable YOLO detection node'
         ),
         DeclareLaunchArgument(
             'detection_model_dir',
@@ -362,32 +346,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'detection_model_trt', 
             default_value='best_lab.plan',
-            description='TensorRT engine file for YOLOv8 detection model',
-        ),
-        DeclareLaunchArgument(
-            'yolo_input_width', 
-            default_value='1440',
-            description='Input width for YOLOv8 model'
-        ),
-        DeclareLaunchArgument(
-            'yolo_input_height', 
-            default_value='1088',
-            description='Input height for YOLOv8 model'
-        ),
-        DeclareLaunchArgument(
-            'yolo_conf_thresh', 
-            default_value='0.5',
-            description='Confidence threshold for YOLOv8 detection'
-        ),
-        DeclareLaunchArgument(
-            'yolo_iou_thresh', 
-            default_value='0.45',
-            description='IOU threshold for YOLOv8 detection'
-        ),
-        DeclareLaunchArgument(
-            'yolo_max_det', 
-            default_value='300',
-            description='Maximum detections for YOLOv8'
+            description='TensorRT engine file for YOLO detection model',
         ),
         
         OpaqueFunction(function=launch_setup)

@@ -29,10 +29,15 @@ def launch_setup(context, *args, **kwargs):
             'engine_path': engine_path,
             'image_topic': LaunchConfiguration('yolo_image_topic'),
             'detections_topic': LaunchConfiguration('yolo_detections_topic'),
+            'seg_detection_topic': LaunchConfiguration('yolo_seg_detection_topic'),
 
             # Tensors
             'input_tensor': 'images',
             'output_tensor': 'output0',
+            'proto_tensor': 'output1',
+
+            # Task type (auto-detect based on engine, or force 'det' or 'seg')
+            'task': 'auto',
 
             # Model input (engine expects 1088x1440)
             'input_width': LaunchConfiguration('yolo_input_width'),
@@ -40,10 +45,21 @@ def launch_setup(context, *args, **kwargs):
             'stride': 32,
             'scaleup': True,
 
+            # Scale settings
+            'scale_output': True,
+            'output_width': output_width,
+            'output_height': output_height,
+            'detection_topic_scaled': '/firefly_left/detections_scaled',
+            'seg_detection_topic_scaled': '/firefly_left/instance_segmentation_scaled',
+
             # Postprocess
             'conf_thresh': LaunchConfiguration('yolo_conf_thresh'),
             'iou_thresh': LaunchConfiguration('yolo_iou_thresh'),
             'max_det': LaunchConfiguration('yolo_max_det'),
+
+            # Segmentation support
+            'mask_alpha': 0.45,
+            'mask_thresh': 0.50,
 
             # QoS subscriber
             'sub_qos.reliability': 'reliable',
@@ -57,15 +73,9 @@ def launch_setup(context, *args, **kwargs):
             'pub_qos.history': 'keep_last',
             'pub_qos.depth': 5,
 
-            # Segmentation support
-            'proto_tensor': 'output1',
-            'task': 'auto',          # set to 'seg' for yolo26-seg engine; 'det' for detection
-            'debug_masks': True,
-            'mask_alpha': 0.45,
-            'mask_thresh': 0.50,
-
             # Debug
             'debug': LaunchConfiguration('debug'),
+            'debug_masks': LaunchConfiguration('debug_masks'),
         }],
         arguments=['--ros-args', '--log-level', 'info'],
     )
@@ -84,6 +94,7 @@ def generate_launch_description():
         # Topic names
         DeclareLaunchArgument('yolo_image_topic', default_value='/firefly_left/image_raw'),
         DeclareLaunchArgument('yolo_detections_topic', default_value='/detections'),
+        DeclareLaunchArgument('yolo_seg_detection_topic', default_value='/instance_segmentation'),
 
         # YOLO input size (matches your export / engine)
         DeclareLaunchArgument('yolo_input_width', default_value='1440'),
@@ -95,6 +106,7 @@ def generate_launch_description():
         DeclareLaunchArgument('yolo_max_det', default_value='300'),
 
         DeclareLaunchArgument('debug', default_value='false'),
+        DeclareLaunchArgument('debug_masks', default_value='false'),
 
         OpaqueFunction(function=launch_setup)
     ])

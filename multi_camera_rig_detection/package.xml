@@ -10,6 +10,8 @@
     <buildtool_depend>ament_cmake</buildtool_depend>
 
     <depend>multi_camera_rig_common</depend>
+    <depend>multi_camera_rig_msgs</depend>
+    
     <depend>rclcpp</depend>
     <depend>rclpy</depend>
     <depend>rclcpp_components</depend>

@@ -1,4 +1,5 @@
 #include "multi_camera_rig_reconstruction/semantic_pointcloud.hpp"
+#include "multi_camera_rig_msgs/msg/instance_segmentation2_d_array.hpp"
 
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc.hpp>
@@ -11,6 +12,11 @@
 
 namespace multi_camera_rig_reconstruction
 {
+
+static inline int clampi(int v, int lo, int hi)
+{
+    return std::max(lo, std::min(v, hi));
+}
 
 SemanticPointCloud::SemanticPointCloud(const SemanticPointCloudConfig &config, bool debug, rclcpp::Logger logger)
     : config_(config), debug_(debug), logger_(logger)
@@ -644,6 +650,306 @@ bool SemanticPointCloud::processSemanticPointCloud(
         RCLCPP_INFO(logger_, "[SemanticPointCloud] Created semantic point cloud with %zu points", idx);
 
     cloud_msg = cloud;
+    return true;
+}
+
+bool SemanticPointCloud::processSemanticPointCloudInstances(
+    const sensor_msgs::msg::Image &disp_msg,
+    const sensor_msgs::msg::Image &image_msg,
+    const multi_camera_rig_msgs::msg::InstanceSegmentation2DArray &instances,
+    double scale_x,
+    double scale_y,
+    const std_msgs::msg::Header &header,
+    sensor_msgs::msg::PointCloud2 &cloud_msg)
+{
+    if (debug_)
+        RCLCPP_INFO(logger_, "[SemanticPointCloud] processSemanticPointCloudInstances called with %zu instances",
+                    instances.detections.size());
+
+    if (!have_info_)
+    {
+        if (debug_)
+            RCLCPP_WARN(logger_, "[SemanticPointCloud] No camera info available");
+        return false;
+    }
+
+    // Convert disparity image
+    cv_bridge::CvImageConstPtr disp_cv;
+    try
+    {
+        disp_cv = cv_bridge::toCvShare(std::make_shared<sensor_msgs::msg::Image>(disp_msg), "32FC1");
+    }
+    catch (const std::exception &e)
+    {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert disparity: %s", e.what());
+        return false;
+    }
+
+    // Convert RGB image
+    cv_bridge::CvImageConstPtr image_cv;
+    try
+    {
+        auto img_ptr = std::make_shared<sensor_msgs::msg::Image>(image_msg);
+        image_cv = cv_bridge::toCvShare(img_ptr, image_msg.encoding);
+    }
+    catch (const std::exception &e)
+    {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Failed to convert RGB image: %s", e.what());
+        return false;
+    }
+
+    const int out_h = disp_cv->image.rows;
+    const int out_w = disp_cv->image.cols;
+
+    if (image_cv->image.rows != out_h || image_cv->image.cols != out_w)
+    {
+        if (debug_)
+            RCLCPP_ERROR(logger_, "[SemanticPointCloud] Size mismatch: image %dx%d vs disparity %dx%d",
+                         image_cv->image.rows, image_cv->image.cols, out_h, out_w);
+        return false;
+    }
+
+    // labels/conf initialized to background
+    const size_t N = (size_t)out_h * (size_t)out_w;
+    std::vector<int32_t> labels(N, config_.background_class_id);
+    std::vector<float> confidences(N, (float)config_.background_confidence);
+
+    // Sort by score ascending so higher score overwrites later
+    std::vector<multi_camera_rig_msgs::msg::InstanceSegmentation2D> sorted = instances.detections;
+    std::sort(sorted.begin(), sorted.end(),
+              [](const auto &a, const auto &b) { return a.score < b.score; });
+
+    for (const auto &inst : sorted)
+    {
+        int32_t class_id = -1;
+        try
+        {
+            class_id = static_cast<int32_t>(std::stoi(inst.class_id));
+        }
+        catch (...)
+        {
+            continue;
+        }
+        const float conf = (float)inst.score;
+
+        // bbox in original resolution
+        const float orig_cx = (float)inst.bbox.center.position.x;
+        const float orig_cy = (float)inst.bbox.center.position.y;
+        const float orig_w  = (float)inst.bbox.size_x;
+        const float orig_h  = (float)inst.bbox.size_y;
+
+        // scale bbox into target image
+        const float cx = orig_cx * (float)scale_x;
+        const float cy = orig_cy * (float)scale_y;
+        const float w  = orig_w  * (float)scale_x;
+        const float h  = orig_h  * (float)scale_y;
+
+        int x1 = (int)std::floor(cx - 0.5f * w);
+        int y1 = (int)std::floor(cy - 0.5f * h);
+        int x2 = (int)std::ceil (cx + 0.5f * w);
+        int y2 = (int)std::ceil (cy + 0.5f * h);
+
+        x1 = clampi(x1, 0, out_w - 1);
+        y1 = clampi(y1, 0, out_h - 1);
+        x2 = clampi(x2, 0, out_w);
+        y2 = clampi(y2, 0, out_h);
+
+        if (!(x2 > x1 && y2 > y1))
+            continue;
+
+        const bool has_mask =
+            inst.mask_width > 0 && inst.mask_height > 0 &&
+            inst.mask_data.size() == (size_t)inst.mask_width * (size_t)inst.mask_height;
+
+        if (has_mask)
+        {
+            // Mask is ROI-aligned to bbox (as published by detector)
+            // It should match bbox size. If it doesn't, safely map with scaling.
+            const int mw = (int)inst.mask_width;
+            const int mh = (int)inst.mask_height;
+            const uint8_t *m = inst.mask_data.data();
+
+            // Map pixels in bbox to mask indices:
+            // u in [x1,x2) -> mx in [0,mw)
+            // v in [y1,y2) -> my in [0,mh)
+            const float sxm = (mw > 0) ? (float)mw / (float)(x2 - x1) : 0.f;
+            const float sym = (mh > 0) ? (float)mh / (float)(y2 - y1) : 0.f;
+
+            for (int v = y1; v < y2; ++v)
+            {
+                const int my = clampi((int)std::floor((v - y1) * sym), 0, mh - 1);
+                const uint8_t *mrow = m + (size_t)my * (size_t)mw;
+
+                for (int u = x1; u < x2; ++u)
+                {
+                    const int mx = clampi((int)std::floor((u - x1) * sxm), 0, mw - 1);
+                    if (mrow[mx] == 0)
+                        continue;
+
+                    const size_t idx = (size_t)v * (size_t)out_w + (size_t)u;
+                    labels[idx] = class_id;
+                    confidences[idx] = conf;
+                }
+            }
+        }
+        else
+        {
+            // Fallback: bbox fill
+            for (int v = y1; v < y2; ++v)
+            {
+                for (int u = x1; u < x2; ++u)
+                {
+                    const size_t idx = (size_t)v * (size_t)out_w + (size_t)u;
+                    labels[idx] = class_id;
+                    confidences[idx] = conf;
+                }
+            }
+        }
+    }
+
+    // Generate pointcloud (same as existing semantic path)
+    const double fx = fx_;
+    const double fy = fy_;
+    const double cx0 = cx_;
+    const double cy0 = cy_;
+    const double B = config_.baseline;
+    const double maxR = config_.max_range_m;
+    const int s = std::max(1, config_.stride);
+
+    // Count valid points
+    size_t n_valid = 0;
+    for (int v = 0; v < out_h; v += s)
+    {
+        const float *row = disp_cv->image.ptr<float>(v);
+        for (int u = 0; u < out_w; u += s)
+        {
+            const float d = row[u];
+            if (d <= 0.0f)
+            {
+                if (config_.use_background) n_valid++;
+                continue;
+            }
+            const double Z = fx * B / (double)d;
+            if (Z <= 0.0 || Z > maxR)
+            {
+                if (config_.use_background) n_valid++;
+                continue;
+            }
+            n_valid++;
+        }
+    }
+
+    sensor_msgs::msg::PointCloud2 cloud;
+    cloud.header = header;
+    cloud.height = 1;
+    cloud.width = (uint32_t)n_valid;
+    cloud.is_bigendian = false;
+    cloud.is_dense = false;
+
+    cloud.fields.resize(6);
+
+    cloud.fields[0].name = "x";
+    cloud.fields[0].offset = 0;
+    cloud.fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[0].count = 1;
+
+    cloud.fields[1].name = "y";
+    cloud.fields[1].offset = 4;
+    cloud.fields[1].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[1].count = 1;
+
+    cloud.fields[2].name = "z";
+    cloud.fields[2].offset = 8;
+    cloud.fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[2].count = 1;
+
+    cloud.fields[3].name = "rgb";
+    cloud.fields[3].offset = 12;
+    cloud.fields[3].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[3].count = 1;
+
+    cloud.fields[4].name = "class_id";
+    cloud.fields[4].offset = 16;
+    cloud.fields[4].datatype = sensor_msgs::msg::PointField::INT32;
+    cloud.fields[4].count = 1;
+
+    cloud.fields[5].name = "confidence";
+    cloud.fields[5].offset = 20;
+    cloud.fields[5].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[5].count = 1;
+
+    cloud.point_step = 24;
+    cloud.row_step = cloud.point_step * cloud.width;
+    cloud.data.resize(cloud.row_step);
+
+    size_t out_i = 0;
+    for (int v = 0; v < out_h; v += s)
+    {
+        const float *row = disp_cv->image.ptr<float>(v);
+        for (int u = 0; u < out_w; u += s)
+        {
+            const float d = row[u];
+            bool use_max_range = false;
+
+            if (d <= 0.0f)
+            {
+                if (config_.use_background) use_max_range = true;
+                else continue;
+            }
+
+            double Z = 0.0;
+            if (!use_max_range)
+            {
+                Z = fx * B / (double)d;
+                if (Z <= 0.0)
+                {
+                    if (config_.use_background) use_max_range = true;
+                    else continue;
+                }
+                else if (Z > maxR)
+                {
+                    if (config_.use_background) Z = maxR;
+                    else continue;
+                }
+            }
+            else
+            {
+                Z = maxR;
+            }
+
+            const float X = (float)(((double)u - cx0) * Z / fx);
+            const float Y = (float)(((double)v - cy0) * Z / fy);
+            const float Zf = (float)Z;
+
+            const size_t pix = (size_t)v * (size_t)out_w + (size_t)u;
+            const int32_t class_id = labels[pix];
+            const float conf = confidences[pix];
+
+            float rgb_f;
+            if (config_.color_by_class)
+            {
+                rgb_f = classIdToRGBFloat(class_id);
+            }
+            else
+            {
+                const cv::Vec3b bgr = image_cv->image.at<cv::Vec3b>(v, u);
+                rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]);
+            }
+
+            uint8_t *ptr = cloud.data.data() + out_i * cloud.point_step;
+            std::memcpy(ptr + 0,  &X, sizeof(float));
+            std::memcpy(ptr + 4,  &Y, sizeof(float));
+            std::memcpy(ptr + 8,  &Zf, sizeof(float));
+            std::memcpy(ptr + 12, &rgb_f, sizeof(float));
+            std::memcpy(ptr + 16, &class_id, sizeof(int32_t));
+            std::memcpy(ptr + 20, &conf, sizeof(float));
+            out_i++;
+        }
+    }
+
+    cloud_msg = std::move(cloud);
     return true;
 }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "multi_camera_rig_msgs/msg/instance_segmentation2_d_array.hpp"
+
 #include <opencv2/core.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
@@ -33,6 +35,7 @@ struct SemanticPointCloudConfig
 {
     // Mode selection
     bool use_semantics = false;
+    bool use_seg_detection = false;
 
     // Stereo parameters
     double baseline = 0.06;
@@ -85,6 +88,16 @@ public:
         const sensor_msgs::msg::Image &disp_msg,
         const sensor_msgs::msg::Image &image_msg,
         const std::vector<vision_msgs::msg::Detection2D> &detections,
+        double scale_x,
+        double scale_y,
+        const std_msgs::msg::Header &header,
+        sensor_msgs::msg::PointCloud2 &cloud_msg);
+
+    // Process disparity and image to generate semantic point cloud using instance masks (if present)
+    bool processSemanticPointCloudInstances(
+        const sensor_msgs::msg::Image &disp_msg,
+        const sensor_msgs::msg::Image &image_msg,
+        const multi_camera_rig_msgs::msg::InstanceSegmentation2DArray &instances,
         double scale_x,
         double scale_y,
         const std_msgs::msg::Header &header,
