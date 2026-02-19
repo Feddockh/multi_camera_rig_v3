@@ -2,13 +2,6 @@
 """
 Fake trigger node for simulation.
 Controls image flow by relaying topics when video is "recording".
-
-ros2 service call /trigger/test_connection std_srvs/srv/Trigger
-ros2 service call /trigger/send_trigger std_srvs/srv/Trigger
-ros2 service call /trigger/start_video std_srvs/srv/Trigger
-ros2 service call /trigger/stop_video std_srvs/srv/Trigger
-ros2 service call /trigger/set_flash_duration std_srvs/srv/Trigger "{ }"
-ros2 service call /trigger/set_frame_rate std_srvs/srv/Trigger "{ }"
 """
 
 import rclpy
@@ -19,6 +12,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType, SetParametersResult
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from message_filters import Subscriber, TimeSynchronizer
 
 
 class TriggerNodeFake(Node):
@@ -27,55 +21,61 @@ class TriggerNodeFake(Node):
     def __init__(self):
         super().__init__('trigger_node')
         
-        # Declare parameters
+        # Declare parameters first
         self.declare_parameter(
-            'flash_duration_ms', 100,
-            ParameterDescriptor(description='Flash duration in milliseconds (0-300)',
-                              type=ParameterType.PARAMETER_INTEGER)
-        )
-        self.declare_parameter(
-            'frame_rate_hz', 10,
-            ParameterDescriptor(description='Trigger frame rate in Hz (1-20)',
-                              type=ParameterType.PARAMETER_INTEGER)
-        )
-        self.declare_parameter(
-            'auto_connect', True,
-            ParameterDescriptor(description='Automatically test connection on startup',
-                              type=ParameterType.PARAMETER_BOOL
+            'flash_duration_ms',
+            100,
+            ParameterDescriptor(
+                description='Flash duration in milliseconds (0-300)',
+                type=ParameterType.PARAMETER_INTEGER
             )
         )
+        
         self.declare_parameter(
-            'auto_start', False,
-            ParameterDescriptor(description='Automatically start video triggering on startup',
-                              type=ParameterType.PARAMETER_BOOL)
+            'frame_rate_hz',
+            10,
+            ParameterDescriptor(
+                description='Trigger frame rate in Hz (1-20)',
+                type=ParameterType.PARAMETER_INTEGER
+            )
         )
         
-        # Camera topics to relay - specify full topic names
+        self.declare_parameter(
+            'auto_connect',
+            True,
+            ParameterDescriptor(
+                description='Automatically test connection on startup',
+                type=ParameterType.PARAMETER_BOOL
+            )
+        )
+        
+        self.declare_parameter(
+            'auto_start',
+            False,
+            ParameterDescriptor(
+                description='Automatically start video triggering on startup',
+                type=ParameterType.PARAMETER_BOOL
+            )
+        )
+        
+        # For string arrays in ROS 2 Humble, declare without ParameterDescriptor type
         self.declare_parameter(
             'image_sub_topics', 
-            ['cam0/image_raw', 'cam1/image_raw', 'cam2/image_raw', 'cam3/image_raw'],
-            ParameterDescriptor(description='List of image topics to subscribe to',
-                              type=ParameterType.PARAMETER_STRING_ARRAY)
+            ['cam0/image_raw', 'cam1/image_raw', 'cam2/image_raw', 'cam3/image_raw']
         )
         self.declare_parameter(
             'image_pub_topics',
             ['cam0/image_raw/triggered', 'cam1/image_raw/triggered', 
-             'cam2/image_raw/triggered', 'cam3/image_raw/triggered'],
-            ParameterDescriptor(description='List of image topics to publish to (triggered)',
-                              type=ParameterType.PARAMETER_STRING_ARRAY)
+             'cam2/image_raw/triggered', 'cam3/image_raw/triggered']
         )
         self.declare_parameter(
             'info_sub_topics',
-            ['cam0/camera_info', 'cam1/camera_info', 'cam2/camera_info', 'cam3/camera_info'],
-            ParameterDescriptor(description='List of camera info topics to subscribe to',
-                              type=ParameterType.PARAMETER_STRING_ARRAY)
+            ['cam0/camera_info', 'cam1/camera_info', 'cam2/camera_info', 'cam3/camera_info']
         )
         self.declare_parameter(
             'info_pub_topics',
             ['cam0/camera_info/triggered', 'cam1/camera_info/triggered',
-             'cam2/camera_info/triggered', 'cam3/camera_info/triggered'],
-            ParameterDescriptor(description='List of camera info topics to publish to (triggered)',
-                              type=ParameterType.PARAMETER_STRING_ARRAY)
+             'cam2/camera_info/triggered', 'cam3/camera_info/triggered']
         )
         
         # Get parameters
@@ -88,8 +88,10 @@ class TriggerNodeFake(Node):
         info_sub_topics = self.get_parameter('info_sub_topics').value
         info_pub_topics = self.get_parameter('info_pub_topics').value
         
-        # Validate that all topic lists have the same length
+        # Validate lengths
         num_cameras = len(image_sub_topics)
+        if num_cameras == 0:
+            raise ValueError("image_sub_topics cannot be empty")
         if not (len(image_pub_topics) == num_cameras and 
                 len(info_sub_topics) == num_cameras and 
                 len(info_pub_topics) == num_cameras):
@@ -101,45 +103,51 @@ class TriggerNodeFake(Node):
         
         # State tracking
         self.video_running = False
-        self.single_trigger_pending = [False] * num_cameras  # Track single trigger per camera
+        self.single_trigger_pending = False  # Single flag for all cameras
         
-        # QoS profile for image topics
+        # QoS profile
         image_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=10  # Increased for synchronization
         )
         
-        # Create relay subscriptions and publishers for each camera
-        self.relays = []
+        # Create publishers
+        self.image_pubs = []
+        self.info_pubs = []
         for i in range(num_cameras):
-            relay = {
-                'image_sub': self.create_subscription(
-                    Image,
-                    image_sub_topics[i],
-                    lambda msg, idx=i: self.image_callback(msg, idx),
-                    image_qos
-                ),
-                'image_pub': self.create_publisher(
-                    Image,
-                    image_pub_topics[i],
-                    image_qos
-                ),
-                'info_sub': self.create_subscription(
-                    CameraInfo,
-                    info_sub_topics[i],
-                    lambda msg, idx=i: self.info_callback(msg, idx),
-                    image_qos
-                ),
-                'info_pub': self.create_publisher(
-                    CameraInfo,
-                    info_pub_topics[i],
-                    image_qos
-                ),
-                'image_sub_topic': image_sub_topics[i],
-                'image_pub_topic': image_pub_topics[i]
-            }
-            self.relays.append(relay)
+            self.image_pubs.append(
+                self.create_publisher(Image, image_pub_topics[i], image_qos)
+            )
+            self.info_pubs.append(
+                self.create_publisher(CameraInfo, info_pub_topics[i], image_qos)
+            )
+        
+        # Create synchronized subscribers for images using EXACT TIME
+        self.image_subs = []
+        for topic in image_sub_topics:
+            sub = Subscriber(self, Image, topic, qos_profile=image_qos)
+            self.image_subs.append(sub)
+        
+        # Create synchronized subscribers for camera info using EXACT TIME
+        self.info_subs = []
+        for topic in info_sub_topics:
+            sub = Subscriber(self, CameraInfo, topic, qos_profile=image_qos)
+            self.info_subs.append(sub)
+        
+        # Synchronize images using ExactTime (requires identical timestamps)
+        self.image_sync = TimeSynchronizer(
+            self.image_subs, 
+            queue_size=10
+        )
+        self.image_sync.registerCallback(self.synchronized_image_callback)
+        
+        # Synchronize camera info using ExactTime
+        self.info_sync = TimeSynchronizer(
+            self.info_subs,
+            queue_size=10
+        )
+        self.info_sync.registerCallback(self.synchronized_info_callback)
         
         # Create services
         self.srv_test_connection = self.create_service(
@@ -164,32 +172,36 @@ class TriggerNodeFake(Node):
         if auto_connect:
             self.test_connection()
         
-        self.get_logger().info(f'Fake trigger node initialized - relaying {num_cameras} cameras')
-        for relay in self.relays:
-            self.get_logger().info(f"  {relay['image_sub_topic']} -> {relay['image_pub_topic']}")
+        self.get_logger().info(f'Fake trigger node initialized - relaying {num_cameras} cameras with ExactTime synchronization')
+        for i in range(num_cameras):
+            self.get_logger().info(f"  {image_sub_topics[i]} -> {image_pub_topics[i]}")
         
         # Auto-start if requested
         if auto_start:
             self.video_running = True
             self.publish_status(f"Auto-started video at {self.frame_rate} Hz (simulated)")
     
-    def image_callback(self, msg: Image, camera_idx: int):
-        """Relay image only if video is running or single trigger pending."""
+    def synchronized_image_callback(self, *msgs):
+        """Relay synchronized images when video running or trigger pending."""
         if self.video_running:
-            self.relays[camera_idx]['image_pub'].publish(msg)
-        elif self.single_trigger_pending[camera_idx]:
-            self.relays[camera_idx]['image_pub'].publish(msg)
-            self.single_trigger_pending[camera_idx] = False
-            self.get_logger().debug(f"Single trigger image relayed for camera {camera_idx}")
+            # Continuous mode: relay all synchronized images
+            for i, msg in enumerate(msgs):
+                self.image_pubs[i].publish(msg)
+        elif self.single_trigger_pending:
+            # Single trigger mode: relay one synchronized set
+            for i, msg in enumerate(msgs):
+                self.image_pubs[i].publish(msg)
+            self.single_trigger_pending = False
+            self.get_logger().info(f"Single trigger: relayed synchronized images at sec={msgs[0].header.stamp.sec}, nsec={msgs[0].header.stamp.nanosec}")
     
-    def info_callback(self, msg: CameraInfo, camera_idx: int):
-        """Relay camera info only if video is running or single trigger pending."""
+    def synchronized_info_callback(self, *msgs):
+        """Relay synchronized camera info when video running or trigger pending."""
         if self.video_running:
-            self.relays[camera_idx]['info_pub'].publish(msg)
-        elif self.single_trigger_pending[camera_idx]:
-            self.relays[camera_idx]['info_pub'].publish(msg)
-            # Don't clear flag here - let image callback clear it
-            self.get_logger().debug(f"Single trigger camera_info relayed for camera {camera_idx}")
+            for i, msg in enumerate(msgs):
+                self.info_pubs[i].publish(msg)
+        elif self.single_trigger_pending:
+            for i, msg in enumerate(msgs):
+                self.info_pubs[i].publish(msg)
     
     def publish_status(self, message: str):
         """Publish status message."""
@@ -206,7 +218,6 @@ class TriggerNodeFake(Node):
         """Service callback for testing connection."""
         response.success = True
         response.message = "Fake trigger connection OK (simulation)"
-        self.publish_status("Connection test passed (simulated)")
         return response
     
     def send_trigger_callback(self, request, response):
@@ -216,13 +227,12 @@ class TriggerNodeFake(Node):
             response.message = "Cannot send single trigger while video recording is active"
             return response
         
-        # Enable single trigger for all cameras
-        for i in range(len(self.relays)):
-            self.single_trigger_pending[i] = True
+        # Enable single trigger for next synchronized set
+        self.single_trigger_pending = True
         
         response.success = True
-        response.message = f"Single trigger armed for {len(self.relays)} cameras (will relay next image)"
-        self.publish_status(f"Single trigger armed for {len(self.relays)} cameras")
+        response.message = f"Single trigger armed (waiting for synchronized images)"
+        self.publish_status(f"Single trigger armed for {len(self.image_pubs)} cameras")
         return response
     
     def start_video_callback(self, request, response):
