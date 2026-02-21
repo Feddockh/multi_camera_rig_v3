@@ -162,7 +162,7 @@ def launch_setup(context, *args, **kwargs):
                 'detection_topic_scaled': '/firefly_left/detections_scaled',
                 'seg_detection_topic_scaled': '/firefly_left/instance_segmentation_scaled',
                 # Postprocess
-                'conf_thresh': 0.5,
+                'conf_thresh': float(LaunchConfiguration('conf_thresh').perform(context)),
                 'iou_thresh': 0.45,
                 'max_det': 300,
                 # Segmentation support
@@ -217,7 +217,7 @@ def launch_setup(context, *args, **kwargs):
             'depth_topic': '/firefly_left/depth',
             # Semantic parameters (for semantic mode)
             'background_class_id': -1,
-            'background_confidence': 0.5,
+            'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
             'color_by_class': True,
             # Subscriber QoS settings
             'sub_qos.reliability': 'best_effort',
@@ -347,6 +347,11 @@ def generate_launch_description():
             'detection_model_trt', 
             default_value='best_lab.plan',
             description='TensorRT engine file for YOLO detection model',
+        ),
+        DeclareLaunchArgument(
+            'conf_thresh',
+            default_value='0.5',
+            description='Confidence threshold for detection filtering'
         ),
         
         OpaqueFunction(function=launch_setup)
