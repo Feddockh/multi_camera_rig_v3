@@ -4,6 +4,18 @@
     <!-- Include macro files -->
     <xacro:include filename="$(find multi_camera_rig_description)/urdf/multi_camera_rig_macro.urdf.xacro" />
 
+    <!-- <gazebo reference="multi_camera_rig_mount">
+        <gravity>false</gravity>
+    </gazebo>
+
+    <gazebo reference="multi_camera_rig_link">
+        <gravity>false</gravity>
+    </gazebo>
+
+    <gazebo>
+        <static>true</static>
+    </gazebo> -->
+
     <xacro:multi_camera_rig/>
 
 </robot>
