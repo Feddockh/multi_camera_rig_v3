@@ -16,6 +16,26 @@ find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
 
 # ------------------------
+# Spinnaker SDK check (required for real hardware only)
+# ------------------------
+find_library(SPINNAKER_LIB Spinnaker
+  PATHS
+    /usr/lib
+    /usr/local/lib
+    /opt/spinnaker/lib
+)
+if(NOT SPINNAKER_LIB)
+  message(WARNING
+    "Spinnaker SDK not found — the real hardware camera pipeline "
+    "(spinnaker_synchronized_camera_driver) will not be available at runtime. "
+    "Simulation (use_gazebo:=true) still works without it. "
+    "See multi_camera_rig_cameras/firefly-ros2-wrapper/README.md for installation instructions."
+  )
+else()
+  message(STATUS "Found Spinnaker SDK: ${SPINNAKER_LIB}")
+endif()
+
+# ------------------------
 # Existing nodes
 # ------------------------
 add_executable(flash_simulator_node src/flash_simulator_node.cpp)

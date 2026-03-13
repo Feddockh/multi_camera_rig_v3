@@ -62,6 +62,12 @@ To enable them, install:
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (tested with CUDA 11/12)
 - [TensorRT](https://developer.nvidia.com/tensorrt) — ensure `libnvinfer` and `libnvonnxparser` are on the library path (typically under `/usr/lib/x86_64-linux-gnu/` or `/usr/local/cuda/`)
 
+### Optional: Spinnaker SDK (FLIR Firefly cameras)
+
+The real hardware pipeline for the FLIR Firefly stereo cameras requires the **Spinnaker SDK** from Teledyne Vision Solutions. Without it, `spinnaker_synchronized_camera_driver` will not be available at runtime and the real hardware launch path will fail. Simulation (`use_gazebo:=true`) works without it.
+
+See [multi_camera_rig_cameras/firefly-ros2-wrapper/README.md](multi_camera_rig_cameras/firefly-ros2-wrapper/README.md) for full installation instructions.
+
 ### Optional: Ximea SDK
 
 The `ximea-ros2-wrapper-bringup` package requires the **Ximea API** to build `ximea_camera_node`. If the SDK is not found, the node is skipped and a warning is printed during CMake configuration.
