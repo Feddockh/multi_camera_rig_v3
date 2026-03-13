@@ -40,33 +40,44 @@ ament_target_dependencies(stereo_rectify_scale sensor_msgs OpenCV rclcpp)
 add_library(semantic_pointcloud src/semantic_pointcloud.cpp)
 ament_target_dependencies(semantic_pointcloud sensor_msgs vision_msgs cv_bridge OpenCV rclcpp multi_camera_rig_msgs)
 
-# FoundationStereoMatcher library
-add_library(foundation_stereo_matcher src/foundation_stereo_matcher.cpp)
-target_link_libraries(foundation_stereo_matcher
-  multi_camera_rig_common::trt_runner  # Brings TensorRT/CUDA transitively
-  ${OpenCV_LIBS}
-)
-ament_target_dependencies(foundation_stereo_matcher
-  multi_camera_rig_common
-  OpenCV
-  rclcpp
-)
+if(TARGET multi_camera_rig_common::trt_runner)
+  message(STATUS "trt_runner found — building FoundationStereoMatcher")
+
+  # FoundationStereoMatcher library
+  add_library(foundation_stereo_matcher src/foundation_stereo_matcher.cpp)
+  target_link_libraries(foundation_stereo_matcher
+    multi_camera_rig_common::trt_runner
+    ${OpenCV_LIBS}
+  )
+  ament_target_dependencies(foundation_stereo_matcher
+    multi_camera_rig_common
+    OpenCV
+    rclcpp
+  )
+
+  # Foundation stereo matcher node
+  add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node.cpp)
+  target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
+  target_link_libraries(foundation_stereo_matcher_node foundation_stereo_matcher)
+  ament_target_dependencies(foundation_stereo_matcher_node
+    multi_camera_rig_common
+    rclcpp
+    sensor_msgs
+    cv_bridge
+    message_filters
+  )
+
+  install(TARGETS
+    foundation_stereo_matcher_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
+else()
+  message(STATUS "trt_runner NOT found — skipping FoundationStereoMatcher")
+endif()
 
 # ------------------------
 # Executables
 # ------------------------
-
-# Foundation stereo matcher node
-add_executable(foundation_stereo_matcher_node src/foundation_stereo_matcher_node.cpp)
-target_compile_features(foundation_stereo_matcher_node PUBLIC cxx_std_17)
-target_link_libraries(foundation_stereo_matcher_node foundation_stereo_matcher)
-ament_target_dependencies(foundation_stereo_matcher_node
-  multi_camera_rig_common
-  rclcpp
-  sensor_msgs
-  cv_bridge
-  message_filters
-)
 
 # Stereo rectify + scale node
 add_executable(stereo_rectify_scale_node src/stereo_rectify_scale_node.cpp)
@@ -89,7 +100,6 @@ ament_target_dependencies(semantic_pointcloud_node
 # Install
 # ------------------------
 install(TARGETS
-  foundation_stereo_matcher_node
   stereo_rectify_scale_node
   semantic_pointcloud_node
   DESTINATION lib/${PROJECT_NAME}

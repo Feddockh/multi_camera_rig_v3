@@ -52,6 +52,16 @@ git add .
 git commit -m "Update submodules"
 ```
 
+## Dependencies
+
+### Optional: CUDA & TensorRT
+
+The `multi_camera_rig_detection` and `multi_camera_rig_reconstruction` packages require **CUDA** and **TensorRT** to build their inference nodes (`yolo_trt_node`, `foundation_stereo_matcher_node`). If CUDA or TensorRT is not found on your system, these targets are automatically skipped and the rest of the packages build normally.
+
+To enable them, install:
+- [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (tested with CUDA 11/12)
+- [TensorRT](https://developer.nvidia.com/tensorrt) — ensure `libnvinfer` and `libnvonnxparser` are on the library path (typically under `/usr/lib/x86_64-linux-gnu/` or `/usr/local/cuda/`)
+
 ## Setup
 
 ### 1. Build ROS2 Packages
