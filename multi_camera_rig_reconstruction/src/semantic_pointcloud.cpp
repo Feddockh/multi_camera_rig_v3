@@ -57,10 +57,10 @@ float SemanticPointCloud::classIdToRGBFloat(int32_t class_id)
     // Use a predefined color palette for common classes (0-19)
     // Based on a distinct color scheme
     const uint8_t palette[][3] = {
-        {230, 25, 75},    // Red - class 0
-        {60, 180, 75},    // Green - class 1
-        {255, 225, 25},   // Yellow - class 2
-        {0, 130, 200},    // Blue - class 3
+        {0, 150, 255},    // Blue - class 0
+        {230, 25, 75},    // Red - class 1
+        {60, 180, 75},    // Green - class 2
+        {255, 225, 25},   // Yellow - class 3
         {245, 130, 48},   // Orange - class 4
         {145, 30, 180},   // Purple - class 5
         {70, 240, 240},   // Cyan - class 6

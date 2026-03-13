@@ -356,15 +356,37 @@ inline void parseYoloEnd2EndTransposed(const float* out,
 inline cv::Scalar classColor(int cls)
 {
     // BGR palette
+    // static const cv::Scalar palette[] = {
+    //     {0, 255, 0},    // green
+    //     {0, 0, 255},    // red
+    //     {255, 0, 0},    // blue
+    //     {0, 255, 255},  // yellow
+    //     {255, 0, 255},  // magenta
+    //     {255, 255, 0},  // cyan
+    //     {128, 255, 0},
+    //     {0, 128, 255},
+    // };
     static const cv::Scalar palette[] = {
-        {0, 255, 0},    // green
-        {0, 0, 255},    // red
-        {255, 0, 0},    // blue
-        {0, 255, 255},  // yellow
-        {255, 0, 255},  // magenta
-        {255, 255, 0},  // cyan
-        {128, 255, 0},
-        {0, 128, 255},
+        {255, 150, 0},    // Blue - class 0 (BGR)
+        {75, 25, 230},    // Red - class 1 (BGR)
+        {75, 180, 60},    // Green - class 2 (BGR)
+        {25, 225, 255},   // Yellow - class 3 (BGR)
+        {48, 130, 245},   // Orange - class 4 (BGR)
+        {180, 30, 145},   // Purple - class 5 (BGR)
+        {240, 240, 70},   // Cyan - class 6 (BGR)
+        {230, 50, 240},   // Magenta - class 7 (BGR)
+        {60, 245, 210},   // Lime - class 8 (BGR)
+        {212, 190, 250},  // Pink - class 9 (BGR)
+        {128, 128, 0},    // Teal - class 10 (BGR)
+        {255, 190, 220},  // Lavender - class 11 (BGR)
+        {40, 110, 170},   // Brown - class 12 (BGR)
+        {200, 250, 255},  // Beige - class 13 (BGR)
+        {0, 0, 128},      // Maroon - class 14 (BGR)
+        {195, 255, 170},  // Mint - class 15 (BGR)
+        {0, 128, 128},    // Olive - class 16 (BGR)
+        {180, 215, 255},  // Coral - class 17 (BGR)
+        {128, 0, 0},      // Navy - class 18 (BGR)
+        {128, 128, 128}   // Grey - class 19 (BGR)
     };
     const int n = (int)(sizeof(palette) / sizeof(palette[0]));
     const int idx = (cls >= 0 ? cls : 0) % n;
