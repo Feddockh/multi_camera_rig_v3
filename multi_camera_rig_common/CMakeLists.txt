@@ -61,7 +61,7 @@ if(CUDA_FOUND AND TENSORRT_LIB AND TENSORRT_PLUGIN_LIB)
   # Export targets for downstream packages
   ament_export_targets(trt_runnerTargets HAS_LIBRARY_TARGET)
 else()
-  message(STATUS "CUDA or TensorRT NOT found — skipping trt_runner")
+  message(WARNING "CUDA or TensorRT NOT found — skipping trt_runner. Detection and reconstruction inference nodes will not be built.")
 endif()
 
 # Install headers (always)
