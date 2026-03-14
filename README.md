@@ -247,12 +247,6 @@ ls multi_camera_rig_reconstruction/models/
 ```
 We used tensorrt 10.9.0.34 from the .deb install following this guide: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html
 
-**No camera detected:**
-```bash
-ls /dev/video*
-# May need: sudo usermod -a -G video $USER
-```
-
 ## License
 
 See individual package LICENSE files for details.
