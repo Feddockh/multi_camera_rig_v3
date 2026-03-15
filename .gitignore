@@ -1,10 +1,7 @@
-# ROS build artifacts
-build/
-install/
-log/
-
 # Python
 __pycache__/
+# Ignore all Python bytecode files with extensions .pyc, .pyo, and .pyd.
+# These files are generated automatically during Python execution and are not needed in version control.
 *.py[cod]
 *$py.class
 *.so
@@ -24,3 +21,6 @@ Thumbs.db
 *.plan
 *.onnx
 *.pt
+
+# Tools
+multi_camera_rig_common/tools/make_tensorrt
