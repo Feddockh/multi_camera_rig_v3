@@ -103,7 +103,8 @@ class TriggerNodeFake(Node):
         
         # State tracking
         self.video_running = False
-        self.single_trigger_pending = False  # Single flag for all cameras
+        self.single_trigger_images_pending = False  # Single flag for all cameras
+        self.single_trigger_info_pending = False  # Single flag for all cameras
         
         # QoS profile
         image_qos = QoSProfile(
@@ -187,11 +188,11 @@ class TriggerNodeFake(Node):
             # Continuous mode: relay all synchronized images
             for i, msg in enumerate(msgs):
                 self.image_pubs[i].publish(msg)
-        elif self.single_trigger_pending:
+        elif self.single_trigger_images_pending:
             # Single trigger mode: relay one synchronized set
             for i, msg in enumerate(msgs):
                 self.image_pubs[i].publish(msg)
-            self.single_trigger_pending = False
+            self.single_trigger_images_pending = False
             self.get_logger().info(f"Single trigger: relayed synchronized images at sec={msgs[0].header.stamp.sec}, nsec={msgs[0].header.stamp.nanosec}")
     
     def synchronized_info_callback(self, *msgs):
@@ -199,7 +200,7 @@ class TriggerNodeFake(Node):
         if self.video_running:
             for i, msg in enumerate(msgs):
                 self.info_pubs[i].publish(msg)
-        elif self.single_trigger_pending:
+        elif self.single_trigger_info_pending:
             for i, msg in enumerate(msgs):
                 self.info_pubs[i].publish(msg)
     
@@ -228,7 +229,8 @@ class TriggerNodeFake(Node):
             return response
         
         # Enable single trigger for next synchronized set
-        self.single_trigger_pending = True
+        self.single_trigger_images_pending = True
+        self.single_trigger_info_pending = True
         
         response.success = True
         response.message = f"Single trigger armed (waiting for synchronized images)"
