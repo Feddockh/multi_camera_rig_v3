@@ -345,12 +345,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'detection_model_trt', 
-            default_value='best_lab.plan',
+            default_value='best_lab_seg_v2.plan',
             description='TensorRT engine file for YOLO detection model',
         ),
         DeclareLaunchArgument(
             'conf_thresh',
-            default_value='0.5',
+            default_value='0.3',
             description='Confidence threshold for detection filtering'
         ),
         
