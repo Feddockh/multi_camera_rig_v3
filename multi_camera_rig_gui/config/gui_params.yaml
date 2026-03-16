@@ -36,7 +36,7 @@
       max: 6.0
       default: 0.0
       step: 0.1
-      node: "/ximea_camera"
+      node: "/ximea"
       param:
         - "gain"
     
@@ -45,7 +45,7 @@
       min: 50
       max: 500000
       default: 10000
-      node: "/ximea_camera"
+      node: "/ximea"
       param:
         - "exposure_time"
     

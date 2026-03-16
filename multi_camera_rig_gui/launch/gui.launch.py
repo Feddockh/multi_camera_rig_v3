@@ -26,7 +26,7 @@ def launch_setup(context, *args, **kwargs):
                 # Trigger services
                 'trigger_start_service': '/trigger/start_video',
                 'trigger_stop_service': '/trigger/stop_video',
-                'trigger_is_running_service': '/trigger/is_recording',
+                'trigger_is_running_service': '/trigger/is_video_running',
                 # Image topics for display
                 'image_topics.img1': '/firefly_left/image_raw',
                 'image_topics.img2': '/ximea/image_raw',
