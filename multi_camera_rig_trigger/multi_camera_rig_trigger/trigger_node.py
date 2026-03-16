@@ -137,6 +137,12 @@ class TriggerNode(Node):
             'trigger/set_frame_rate',
             self.set_frame_rate_callback
         )
+
+        self.srv_is_video_running = self.create_service(
+            Trigger,
+            'trigger/is_video_running',
+            self.is_video_running_callback
+        )
         
         # Publisher for status messages
         self.status_publisher = self.create_publisher(
@@ -271,6 +277,12 @@ class TriggerNode(Node):
         if success:
             self.publish_status(f"Frame rate set to {rate} Hz")
         
+        return response
+
+    def is_video_running_callback(self, request, response):
+        """Service callback to query whether video recording is currently active."""
+        response.success = self.hardware.video_running
+        response.message = "running" if self.hardware.video_running else "stopped"
         return response
     
     def parameters_callback(self, params):

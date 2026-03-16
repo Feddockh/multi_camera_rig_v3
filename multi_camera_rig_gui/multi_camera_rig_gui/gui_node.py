@@ -13,6 +13,7 @@ import sys
 import signal
 import subprocess
 import os
+import time
 from datetime import datetime
 import numpy as np
 from typing import Dict, Any, Optional
@@ -57,6 +58,7 @@ class CameraRigGUI(QMainWindow):
         self.bag_recording = False
         self.bag_process: Optional[subprocess.Popen] = None
         self.current_bag_path: Optional[str] = None
+        self._last_video_state_check = 0.0
         
         # Load parameters from config
         self.load_parameters()
@@ -101,6 +103,7 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('update_rate_hz', 60.0)
         self.node.declare_parameter('trigger_start_service', '/trigger/start_video')
         self.node.declare_parameter('trigger_stop_service', '/trigger/stop_video')
+        self.node.declare_parameter('trigger_is_running_service', '/trigger/is_video_running')
         
         # Declare recording parameters
         self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
@@ -404,6 +407,9 @@ class CameraRigGUI(QMainWindow):
         
         self.trigger_start_client = self.node.create_client(Trigger, start_service)
         self.trigger_stop_client = self.node.create_client(Trigger, stop_service)
+
+        is_running_service = self.node.get_parameter('trigger_is_running_service').value
+        self.trigger_is_running_client = self.node.create_client(Trigger, is_running_service)
         
         # Parameter clients for each controllable node
         # We'll set parameters directly using set_parameters service calls
@@ -417,6 +423,7 @@ class CameraRigGUI(QMainWindow):
         try:
             cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img1.emit(cv_image)
+            self._maybe_check_video_state()
         except Exception as e:
             self.node.get_logger().error(f"Error processing compressed image 1: {e}")
     
@@ -425,6 +432,7 @@ class CameraRigGUI(QMainWindow):
         try:
             cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img2.emit(cv_image)
+            self._maybe_check_video_state()
         except Exception as e:
             self.node.get_logger().error(f"Error processing compressed image 2: {e}")
     
@@ -433,6 +441,7 @@ class CameraRigGUI(QMainWindow):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img1.emit(cv_image)
+            self._maybe_check_video_state()
         except Exception as e:
             self.node.get_logger().error(f"Error processing image 1: {e}")
     
@@ -441,6 +450,7 @@ class CameraRigGUI(QMainWindow):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img2.emit(cv_image)
+            self._maybe_check_video_state()
         except Exception as e:
             self.node.get_logger().error(f"Error processing image 2: {e}")
     
@@ -668,29 +678,21 @@ class CameraRigGUI(QMainWindow):
     def check_recording_state(self):
         """Check if video recording is already active on startup"""
         try:
-            # Try to call start_video - if it fails because already running, we know video is active
-            if not self.trigger_start_client.wait_for_service(timeout_sec=1.0):
+            if not self.trigger_is_running_client.wait_for_service(timeout_sec=1.0):
                 self.log("Warning: Cannot check recording state - trigger service not available")
                 return
-            
-            request = Trigger.Request()
-            future = self.trigger_start_client.call_async(request)
+
+            future = self.trigger_is_running_client.call_async(Trigger.Request())
             future.add_done_callback(self.check_recording_state_callback)
-            
+
         except Exception as e:
             self.log(f"Error checking recording state: {e}")
-    
+
     def check_recording_state_callback(self, future):
         """Handle response from recording state check"""
         try:
             response = future.result()
             if response.success:
-                # Video wasn't running, so we just started it - stop it again
-                self.recording = False
-                stop_request = Trigger.Request()
-                self.trigger_stop_client.call_async(stop_request)
-                self.log("Checked recording state: was stopped")
-            elif "already active" in response.message.lower():
                 # Video was already running - update GUI to match
                 self.recording = True
                 self.start_button.setText("STOP")
@@ -698,7 +700,7 @@ class CameraRigGUI(QMainWindow):
                     QPushButton {
                         background-color: #FF4444;
                         color: white;
-                        font-size: 28px;
+                        font-size: 32px;
                         font-weight: bold;
                         border: 2px solid #CC0000;
                         border-radius: 10px;
@@ -711,8 +713,54 @@ class CameraRigGUI(QMainWindow):
                     }
                 """)
                 self.log("Detected video already running - GUI synced")
+            else:
+                self.recording = False
+                self.log("Checked recording state: stopped")
         except Exception as e:
             self.log(f"Error in recording state callback: {e}")
+
+    def _maybe_check_video_state(self):
+        """Throttled video state poll triggered by incoming images (at most every 1 s)"""
+        now = time.monotonic()
+        if now - self._last_video_state_check < 1.0:
+            return
+        self._last_video_state_check = now
+        if not self.trigger_is_running_client.service_is_ready():
+            return
+        future = self.trigger_is_running_client.call_async(Trigger.Request())
+        future.add_done_callback(self._video_state_poll_callback)
+
+    def _video_state_poll_callback(self, future):
+        """Update START/STOP button if video state changed externally"""
+        try:
+            response = future.result()
+            video_running = response.success
+            if video_running and not self.recording:
+                self.recording = True
+                self.start_button.setText("STOP")
+                self.start_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FF4444;
+                        color: white;
+                        font-size: 32px;
+                        font-weight: bold;
+                        border: 2px solid #CC0000;
+                        border-radius: 10px;
+                    }
+                    QPushButton:hover {
+                        background-color: #FF5555;
+                    }
+                    QPushButton:pressed {
+                        background-color: #DD3333;
+                    }
+                """)
+                self.log("Video started externally - GUI updated to STOP")
+            elif not video_running and self.recording:
+                self.recording = False
+                self.reset_start_button()
+                self.log("Video stopped externally - GUI updated to START")
+        except Exception:
+            pass  # Silently ignore transient poll errors
     
     def on_slider_value_changed(self, name: str, config: Dict[str, Any], 
                                 label: QLabel, slider: QSlider, value: int):
