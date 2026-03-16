@@ -20,12 +20,16 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             LaunchConfiguration('config_file'),
             {
-                # Image topics for display
-                'image_topics.img1': '/firefly_left/image_raw',
-                'image_topics.img2': '/ximea/image_raw',
+                # GUI settings
+                'window_title': 'Multi-Camera Rig Control',
+                'update_rate_hz': 60.0,
                 # Trigger services
                 'trigger_start_service': '/trigger/start_video',
                 'trigger_stop_service': '/trigger/stop_video',
+                'trigger_is_running_service': '/trigger/is_recording',
+                # Image topics for display
+                'image_topics.img1': '/firefly_left/image_raw',
+                'image_topics.img2': '/ximea/image_raw',
                 # Recording settings
                 'recording.topics': [
                     '/firefly_left/image_raw',
@@ -34,9 +38,6 @@ def launch_setup(context, *args, **kwargs):
                 ],
                 'recording.storage_path': '~/tmp',
                 'recording.storage_id': 'sqlite3',
-                # GUI settings
-                'window_title': 'Multi-Camera Rig Control',
-                'update_rate_hz': 60.0,
             },
         ],
         emulate_tty=True,
