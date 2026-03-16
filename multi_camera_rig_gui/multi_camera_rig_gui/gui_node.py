@@ -20,7 +20,6 @@ from typing import Dict, Any, Optional
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 from sensor_msgs.msg import Image, CompressedImage
 from std_srvs.srv import Trigger
 from rcl_interfaces.srv import SetParameters, GetParameters
@@ -29,7 +28,7 @@ from cv_bridge import CvBridge
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QSlider, QLabel, QTextEdit, QGridLayout, QSplitter, QSizePolicy
+    QPushButton, QSlider, QLabel, QTextEdit, QSplitter
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QImage, QPixmap, QPalette, QColor
@@ -475,86 +474,6 @@ class CameraRigGUI(QMainWindow):
             label.size(), Qt.KeepAspectRatio, Qt.FastTransformation
         )
         label.setPixmap(scaled_pixmap)
-    
-    def sync_sliders_with_params(self):
-        """Sync slider values with current parameters from target nodes"""
-        self.log("Syncing sliders with current parameter values...")
-        
-        for name, config in self.slider_configs.items():
-            # Get the first parameter name to query
-            param_name = config['param'][0]
-            node_name = config['node']
-            
-            # Create parameter client
-            param_client = self.node.create_client(
-                GetParameters,
-                f'{node_name}/get_parameters'
-            )
-            
-            # Wait for service with short timeout
-            if not param_client.wait_for_service(timeout_sec=0.5):
-                self.log(f"Warning: Cannot sync {name} - node {node_name} not available")
-                continue
-            
-            # Request parameter value
-            request = GetParameters.Request()
-            request.names = [param_name]
-            
-            try:
-                future = param_client.call_async(request)
-                future.add_done_callback(
-                    lambda f, n=name, c=config, pn=param_name: 
-                    self.sync_slider_callback(f, n, c, pn)
-                )
-            except Exception as e:
-                self.log(f"Error requesting parameter {param_name}: {e}")
-    
-    def sync_slider_callback(self, future, name: str, config: Dict[str, Any], param_name: str):
-        """Handle get parameter response and update slider"""
-        try:
-            response = future.result()
-            if not response.values or response.values[0].type == ParameterType.PARAMETER_NOT_SET:
-                return
-            
-            # Get the parameter value based on type
-            param_value = response.values[0]
-            if param_value.type == ParameterType.PARAMETER_DOUBLE:
-                value = param_value.double_value
-            elif param_value.type == ParameterType.PARAMETER_INTEGER:
-                value = param_value.integer_value
-            else:
-                return
-            
-            # Clamp value to slider range
-            value = max(config['min'], min(config['max'], value))
-            
-            # Get the slider
-            slider = self.sliders.get(name)
-            label = self.slider_labels.get(name)
-            if not slider or not label:
-                return
-            
-            # Convert value to slider position based on slider type
-            has_step = config.get('step') is not None
-            is_int = isinstance(config['min'], int) and isinstance(config['max'], int) and not has_step
-            
-            if is_int:
-                slider.setValue(int(value))
-                label.setText(f"{name}: {int(value)}")
-            elif has_step:
-                step_position = int((value - config['min']) / config['step'])
-                slider.setValue(step_position)
-                label.setText(f"{name}: {value:.1f}")
-            else:
-                range_val = config['max'] - config['min']
-                scaled_value = int(((value - config['min']) / range_val) * 1000)
-                slider.setValue(scaled_value)
-                label.setText(f"{name}: {value:.2f}")
-            
-            self.log(f"Synced {name} to {value}")
-            
-        except Exception as e:
-            self.log(f"Error syncing {param_name}: {e}")
     
     def check_and_sync_nodes(self):
         """Check for nodes coming online and push GUI parameter values to them"""
