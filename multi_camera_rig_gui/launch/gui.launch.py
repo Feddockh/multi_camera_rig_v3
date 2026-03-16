@@ -34,7 +34,6 @@ def launch_setup(context, *args, **kwargs):
                 ],
                 'recording.storage_path': '~/tmp',
                 'recording.storage_id': 'sqlite3',
-                'recording.serialization_format': 'cdr',
                 # GUI settings
                 'window_title': 'Multi-Camera Rig Control',
                 'update_rate_hz': 60.0,

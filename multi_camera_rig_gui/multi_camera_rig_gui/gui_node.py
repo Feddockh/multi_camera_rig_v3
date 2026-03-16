@@ -108,7 +108,6 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
         self.node.declare_parameter('recording.storage_path', '~/ros2_bags')
         self.node.declare_parameter('recording.storage_id', 'sqlite3')
-        self.node.declare_parameter('recording.serialization_format', 'cdr')
         
         # Declare image topics
         self.node.declare_parameter('image_topics.img1', '/firefly_left/image_raw')
@@ -941,7 +940,6 @@ class CameraRigGUI(QMainWindow):
             topics = self.node.get_parameter('recording.topics').value
             storage_path = os.path.expanduser(self.node.get_parameter('recording.storage_path').value)
             storage_id = self.node.get_parameter('recording.storage_id').value
-            serialization_format = self.node.get_parameter('recording.serialization_format').value
             
             # Create storage directory if it doesn't exist
             os.makedirs(storage_path, exist_ok=True)
