@@ -1,10 +1,5 @@
 /**:
   ros__parameters:
-    # Image topics for display
-    image_topics:
-      img1: "/spinnaker_sync_node/firefly_left/image_raw/compressed"
-      img2: "/ximea/image_raw"
-    
     # Flash duration slider settings (ms)
     flash_duration:
       min: 0
@@ -54,21 +49,4 @@
       param:
         - "exposure_time"
     
-    # Trigger services
-    trigger_start_service: "/trigger/start_video"
-    trigger_stop_service: "/trigger/stop_video"
-    
-    # Recording settings
-    recording:
-      topics:
-        - "/spinnaker_sync_node/firefly_left/image_raw"
-        - "/ximea/image_raw"
-        - "/trigger/status"
-      storage_path: "~/tmp"
-      storage_id: "sqlite3"
-      serialization_format: "cdr"
-      qos_profile_file: "qos_profile.yaml"
-    
-    # GUI settings
-    window_title: "Multi-Camera Rig Control"
-    update_rate_hz: 60.0
+

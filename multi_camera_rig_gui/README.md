@@ -95,7 +95,7 @@ ros2 launch multi_camera_rig_gui gui.launch.py
 ## ROS 2 Interface
 
 ### Subscribed Topics
-- `/firefly/image_raw` - Firefly camera image
+- `/firefly_left/image_raw` - Firefly camera image
 - `/ximea/image_raw` - Ximea camera image
 
 ### Service Clients
@@ -110,50 +110,3 @@ ros2 launch multi_camera_rig_gui gui.launch.py
 - `/firefly_camera_node/shutter_time`
 - `/ximea_camera_node/gain_db`
 - `/ximea_camera_node/exposure_time_us`
-
-## Troubleshooting
-
-### GUI doesn't open
-```bash
-python3 -c "import PyQt5; print('PyQt5 OK')"
-pip3 install PyQt5
-```
-
-### Images not displaying
-```bash
-ros2 topic hz /firefly/image_raw
-ros2 topic hz /ximea/image_raw
-```
-
-### Services not available
-```bash
-ros2 service list | grep trigger
-```
-
-### Window doesn't close on Ctrl+C
-The GUI handles SIGINT/SIGTERM signals properly. If unresponsive, use `kill` command.
-
-## File Structure
-
-```
-multi_camera_rig_gui/
-├── config/
-│   └── gui_params.yaml          # Configuration
-├── launch/
-│   └── gui.launch.py            # Launch file
-├── multi_camera_rig_gui/
-│   ├── __init__.py
-│   └── gui_node.py              # Main GUI implementation
-├── package.xml
-├── setup.py
-└── README.md
-```
-
-## License
-
-MIT
-
-## Authors
-
-Hayden Feddock  
-Kantor Lab, Carnegie Mellon University

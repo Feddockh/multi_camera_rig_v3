@@ -2,37 +2,57 @@
 """Launch file for multi-camera rig GUI"""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.substitutions import LaunchConfiguration
+from  launch.substitutions import PathJoinSubstitution as PJoin
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
-def generate_launch_description():
-    """Generate launch description for GUI node"""
-    
-    # Declare launch arguments
-    config_file_arg = DeclareLaunchArgument(
-        'config_file',
-        default_value=PathJoinSubstitution([
-            FindPackageShare('multi_camera_rig_gui'),
-            'config',
-            'gui_params.yaml'
-        ]),
-        description='Path to GUI configuration YAML file'
-    )
-    
+def launch_setup(context, *args, **kwargs):
+
     # GUI node
     gui_node = Node(
         package='multi_camera_rig_gui',
         executable='gui_node',
         name='camera_rig_gui_node',
         output='screen',
-        parameters=[LaunchConfiguration('config_file')],
+        parameters=[
+            LaunchConfiguration('config_file'),
+            {
+                # Image topics for display
+                'image_topics.img1': '/firefly_left/image_raw',
+                'image_topics.img2': '/ximea/image_raw',
+                # Trigger services
+                'trigger_start_service': '/trigger/start_video',
+                'trigger_stop_service': '/trigger/stop_video',
+                # Recording settings
+                'recording.topics': [
+                    '/firefly_left/image_raw',
+                    '/ximea/image_raw',
+                    '/trigger/status',
+                ],
+                'recording.storage_path': '~/tmp',
+                'recording.storage_id': 'sqlite3',
+                'recording.serialization_format': 'cdr',
+                # GUI settings
+                'window_title': 'Multi-Camera Rig Control',
+                'update_rate_hz': 60.0,
+            },
+        ],
         emulate_tty=True,
     )
     
-    return LaunchDescription([
-        config_file_arg,
+    return [
         gui_node,
+    ]
+
+def generate_launch_description():
+    """Generate launch description with configurable arguments."""
+    
+    return LaunchDescription([
+        DeclareLaunchArgument('config_file', 
+                              default_value=PJoin([FindPackageShare('multi_camera_rig_gui'), 'config', 'gui_params.yaml']),
+                              description='Path to GUI configuration YAML file'),
+        OpaqueFunction(function=launch_setup)
     ])

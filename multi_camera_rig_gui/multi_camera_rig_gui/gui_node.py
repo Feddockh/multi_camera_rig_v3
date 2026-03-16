@@ -33,6 +33,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QImage, QPixmap, QPalette, QColor
 
+from multi_camera_rig_gui.gui_widgets import (
+    create_action_button, create_utility_button, create_image_panel, create_slider_widget
+)
+
 
 class ROSSignals(QObject):
     """Signals for thread-safe GUI updates from ROS callbacks"""
@@ -99,14 +103,13 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('trigger_stop_service', '/trigger/stop_video')
         
         # Declare recording parameters
-        self.node.declare_parameter('recording.topics', ['/firefly/image_raw', '/ximea/image_raw'])
+        self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
         self.node.declare_parameter('recording.storage_path', '~/ros2_bags')
         self.node.declare_parameter('recording.storage_id', 'sqlite3')
         self.node.declare_parameter('recording.serialization_format', 'cdr')
-        self.node.declare_parameter('recording.qos_profile_file', 'qos_profile.yaml')
         
         # Declare image topics
-        self.node.declare_parameter('image_topics.img1', '/firefly/image_raw')
+        self.node.declare_parameter('image_topics.img1', '/firefly_left/image_raw')
         self.node.declare_parameter('image_topics.img2', '/ximea/image_raw')
         
         # Declare flash duration parameters
@@ -234,46 +237,12 @@ class CameraRigGUI(QMainWindow):
         buttons_layout.setSpacing(5)
         
         # Start/Stop button
-        self.start_button = QPushButton("START")
-        self.start_button.setMinimumHeight(60)
-        self.start_button.setStyleSheet("""
-            QPushButton {
-                background-color: #808080;
-                color: white;
-                font-size: 28px;
-                font-weight: bold;
-                border: 2px solid #404040;
-                border-radius: 10px;
-            }
-            QPushButton:hover {
-                background-color: #909090;
-            }
-            QPushButton:pressed {
-                background-color: #707070;
-            }
-        """)
+        self.start_button = create_action_button("START")
         self.start_button.clicked.connect(self.toggle_recording)
         buttons_layout.addWidget(self.start_button)
         
         # Record button
-        self.record_button = QPushButton("RECORD")
-        self.record_button.setMinimumHeight(60)
-        self.record_button.setStyleSheet("""
-            QPushButton {
-                background-color: #808080;
-                color: white;
-                font-size: 28px;
-                font-weight: bold;
-                border: 2px solid #404040;
-                border-radius: 10px;
-            }
-            QPushButton:hover {
-                background-color: #909090;
-            }
-            QPushButton:pressed {
-                background-color: #707070;
-            }
-        """)
+        self.record_button = create_action_button("RECORD")
         self.record_button.clicked.connect(self.toggle_bag_recording)
         buttons_layout.addWidget(self.record_button)
         
@@ -312,47 +281,13 @@ class CameraRigGUI(QMainWindow):
         
         button_layout.addStretch(1)
         
-        self.dark_cal_button = QPushButton("Dark Calibrate")
-        self.dark_cal_button.setMinimumHeight(80)
-        self.dark_cal_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4A90E2;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border: 2px solid #2E5F8F;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #5AA0F2;
-            }
-            QPushButton:pressed {
-                background-color: #3A80D2;
-            }
-        """)
+        self.dark_cal_button = create_utility_button("Dark Calibrate")
         self.dark_cal_button.clicked.connect(self.on_dark_calibrate)
         button_layout.addWidget(self.dark_cal_button)
         
         button_layout.addStretch(1)
         
-        self.ffc_cal_button = QPushButton("FFC Calibrate")
-        self.ffc_cal_button.setMinimumHeight(80)
-        self.ffc_cal_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4A90E2;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border: 2px solid #2E5F8F;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #5AA0F2;
-            }
-            QPushButton:pressed {
-                background-color: #3A80D2;
-            }
-        """)
+        self.ffc_cal_button = create_utility_button("FFC Calibrate")
         self.ffc_cal_button.clicked.connect(self.on_ffc_calibrate)
         button_layout.addWidget(self.ffc_cal_button)
         
@@ -387,9 +322,19 @@ class CameraRigGUI(QMainWindow):
         
         num_sliders = len(self.slider_configs)
         for i, (name, config) in enumerate(self.slider_configs.items()):
-            slider_container = self.create_slider(name, config)
-            slider_layout.addWidget(slider_container, stretch=1)
-            
+            container, slider, label = create_slider_widget(name, config)
+            slider.valueChanged.connect(
+                lambda value, n=name, c=config, lbl=label, s=slider:
+                self.on_slider_value_changed(n, c, lbl, s, value)
+            )
+            slider.sliderReleased.connect(
+                lambda n=name, c=config, lbl=label, s=slider:
+                self.on_slider_released(n, c, lbl, s)
+            )
+            self.sliders[name] = slider
+            self.slider_labels[name] = label
+            slider_layout.addWidget(container, stretch=1)
+
             # Add stretch between sliders but not after the last one
             if i < num_sliders - 1:
                 slider_layout.addStretch(1)
@@ -399,111 +344,6 @@ class CameraRigGUI(QMainWindow):
         return panel
 
     
-    def create_slider(self, name: str, config: Dict[str, Any]) -> QWidget:
-        """Create a labeled slider with value display"""
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(1)
-        
-        # Determine if this slider has a step size (float with steps) or is integer
-        has_step = config.get('step') is not None
-        is_int = isinstance(config['min'], int) and isinstance(config['max'], int) and not has_step
-        
-        # Label with name and current value
-        if is_int:
-            label = QLabel(f"{name}: {int(config['default'])}")
-        else:
-            label = QLabel(f"{name}: {config['default']:.2f}")
-        label.setStyleSheet("font-size: 11px; font-weight: bold;")
-        label.setMaximumHeight(20)
-        layout.addWidget(label)
-        
-        # Slider
-        slider = QSlider(Qt.Horizontal)
-        slider.setMinimumHeight(40)  # Make slider taller to accommodate larger handle
-        
-        if is_int:
-            # Pure integer slider
-            slider.setMinimum(int(config['min']))
-            slider.setMaximum(int(config['max']))
-            slider.setValue(int(config['default']))
-            slider.setTickInterval(max(1, (config['max'] - config['min']) // 10))
-        elif has_step:
-            # Float slider with step size (e.g., 0.1 increments)
-            step = config['step']
-            num_steps = int((config['max'] - config['min']) / step)
-            slider.setMinimum(0)
-            slider.setMaximum(num_steps)
-            # Calculate which step the default is on
-            default_step = int((config['default'] - config['min']) / step)
-            slider.setValue(default_step)
-            slider.setTickInterval(max(1, num_steps // 10))
-        else:
-            # Smooth float slider (shouldn't reach here with current config)
-            slider.setMinimum(0)
-            slider.setMaximum(1000)
-            range_val = config['max'] - config['min']
-            scaled_default = int(((config['default'] - config['min']) / range_val) * 1000)
-            slider.setValue(scaled_default)
-            slider.setTickInterval(100)
-        
-        slider.setTickPosition(QSlider.TicksBelow)
-        slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #999999;
-                height: 12px;
-                background: white;
-                margin: 2px 0;
-                border-radius: 6px;
-            }
-            QSlider::handle:horizontal {
-                background: #5555FF;
-                border: 2px solid #3333CC;
-                width: 60px;
-                height: 60px;
-                margin: -25px 0;
-                border-radius: 30px;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #6666FF;
-                border: 2px solid #4444DD;
-            }
-        """)
-        
-        # Update label while dragging, but don't log/set parameter
-        slider.valueChanged.connect(
-            lambda value, n=name, c=config, lbl=label, s=slider: 
-            self.on_slider_value_changed(n, c, lbl, s, value)
-        )
-        
-        # Only log and set parameter when slider is released
-        slider.sliderReleased.connect(
-            lambda n=name, c=config, lbl=label, s=slider:
-            self.on_slider_released(n, c, lbl, s)
-        )
-        
-        layout.addWidget(slider)
-        
-        # Min/Max labels
-        minmax_layout = QHBoxLayout()
-        minmax_layout.setContentsMargins(0, 0, 0, 0)
-        min_label = QLabel(f"{config['min']}")
-        min_label.setStyleSheet("font-size: 9px; color: #666666;")
-        min_label.setMaximumHeight(15)
-        max_label = QLabel(f"{config['max']}")
-        max_label.setStyleSheet("font-size: 9px; color: #666666;")
-        max_label.setMaximumHeight(15)
-        minmax_layout.addWidget(min_label)
-        minmax_layout.addStretch()
-        minmax_layout.addWidget(max_label)
-        layout.addLayout(minmax_layout)
-        
-        self.sliders[name] = slider
-        self.slider_labels[name] = label
-        
-        return container
-    
     def create_right_panel(self) -> QWidget:
         """Create right panel with both images stacked vertically"""
         panel = QWidget()
@@ -512,59 +352,11 @@ class CameraRigGUI(QMainWindow):
         layout.setSpacing(10)
         
         # Image 1 (50% of height)
-        img1_widget = QWidget()
-        img1_layout = QVBoxLayout(img1_widget)
-        img1_layout.setContentsMargins(0, 0, 0, 0)
-        img1_layout.setSpacing(2)
-        
-        img1_title = QLabel("Image 1")
-        img1_title.setStyleSheet("font-size: 14px; font-weight: bold; text-align: center;")
-        img1_title.setAlignment(Qt.AlignCenter)
-        img1_title.setMaximumHeight(25)
-        img1_layout.addWidget(img1_title, stretch=0)
-        
-        self.img1_image_label = QLabel()
-        self.img1_image_label.setStyleSheet("""
-            QLabel {
-                background-color: black;
-                border: 2px solid #808080;
-                border-radius: 5px;
-            }
-        """)
-        self.img1_image_label.setAlignment(Qt.AlignCenter)
-        self.img1_image_label.setScaledContents(False)
-        self.img1_image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.img1_image_label.setMinimumSize(1, 1)
-        img1_layout.addWidget(self.img1_image_label, stretch=1)
-        
+        img1_widget, self.img1_image_label = create_image_panel("Image 1")
         layout.addWidget(img1_widget, stretch=50)
         
         # Image 2 (50% of height)
-        img2_widget = QWidget()
-        img2_layout = QVBoxLayout(img2_widget)
-        img2_layout.setContentsMargins(0, 0, 0, 0)
-        img2_layout.setSpacing(2)
-        
-        img2_title = QLabel("Image 2")
-        img2_title.setStyleSheet("font-size: 14px; font-weight: bold; text-align: center;")
-        img2_title.setAlignment(Qt.AlignCenter)
-        img2_title.setMaximumHeight(25)
-        img2_layout.addWidget(img2_title, stretch=0)
-        
-        self.img2_image_label = QLabel()
-        self.img2_image_label.setStyleSheet("""
-            QLabel {
-                background-color: black;
-                border: 2px solid #808080;
-                border-radius: 5px;
-            }
-        """)
-        self.img2_image_label.setAlignment(Qt.AlignCenter)
-        self.img2_image_label.setScaledContents(False)
-        self.img2_image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.img2_image_label.setMinimumSize(1, 1)
-        img2_layout.addWidget(self.img2_image_label, stretch=1)
-        
+        img2_widget, self.img2_image_label = create_image_panel("Image 2")
         layout.addWidget(img2_widget, stretch=50)
         
         return panel
@@ -779,35 +571,99 @@ class CameraRigGUI(QMainWindow):
                 self.configured_nodes.add(node_name)
     
     def sync_node_parameters(self, node_name: str):
-        """Push current GUI slider values to a newly detected node"""
-        # Find all sliders that control this node
-        for name, config in self.slider_configs.items():
-            if config['node'] == node_name:
-                # Get current slider value
-                slider = self.sliders[name]
-                value = slider.value()
-                
-                # Convert slider value to actual parameter value
-                has_step = config.get('step') is not None
-                is_int = isinstance(config['min'], int) and isinstance(config['max'], int) and not has_step
-                
-                if is_int:
-                    actual_value = int(value)
-                elif has_step:
-                    step = config['step']
-                    actual_value = float(config['min'] + (value * step))
+        """Query node's current parameter values; update sliders if set, push defaults if not"""
+        node_sliders = {name: config for name, config in self.slider_configs.items()
+                        if config['node'] == node_name}
+        if not node_sliders:
+            return
+
+        get_params_client = self.node.create_client(
+            GetParameters,
+            f'{node_name}/get_parameters'
+        )
+
+        if not get_params_client.wait_for_service(timeout_sec=0.5):
+            self.log(f"Warning: Cannot query params for {node_name}")
+            return
+
+        # Query the first param name for each slider (representative value)
+        param_names = [config['param'][0] for config in node_sliders.values()]
+        request = GetParameters.Request()
+        request.names = param_names
+
+        future = get_params_client.call_async(request)
+        future.add_done_callback(
+            lambda f: self._handle_node_param_query(f, node_name, node_sliders)
+        )
+
+    def _handle_node_param_query(self, future, node_name: str, node_sliders: dict):
+        """Handle get_parameters response: update sliders for set params, push defaults for unset"""
+        try:
+            response = future.result()
+            for i, (name, config) in enumerate(node_sliders.items()):
+                param_value = response.values[i] if i < len(response.values) else None
+
+                if param_value and param_value.type != ParameterType.PARAMETER_NOT_SET:
+                    # Parameter already has a value on the node — update the slider to match
+                    if param_value.type == ParameterType.PARAMETER_DOUBLE:
+                        value = param_value.double_value
+                    elif param_value.type == ParameterType.PARAMETER_INTEGER:
+                        value = param_value.integer_value
+                    else:
+                        self._push_slider_value_to_node(name, config)
+                        continue
+
+                    value = max(config['min'], min(config['max'], value))
+
+                    slider = self.sliders.get(name)
+                    label = self.slider_labels.get(name)
+                    if slider and label:
+                        has_step = config.get('step') is not None
+                        is_int = (isinstance(config['min'], int) and
+                                  isinstance(config['max'], int) and not has_step)
+                        if is_int:
+                            slider.setValue(int(value))
+                            label.setText(f"{name}: {int(value)}")
+                        elif has_step:
+                            step_position = int((value - config['min']) / config['step'])
+                            slider.setValue(step_position)
+                            label.setText(f"{name}: {value:.1f}")
+                        else:
+                            range_val = config['max'] - config['min']
+                            scaled_value = int(((value - config['min']) / range_val) * 1000)
+                            slider.setValue(scaled_value)
+                            label.setText(f"{name}: {value:.2f}")
+                        self.log(f"Read {node_name}/{config['param'][0]} = {value}, slider updated")
                 else:
-                    actual_value = float(config['min'] + (value / 1000.0) * (config['max'] - config['min']))
-                
-                # Update all parameters associated with this slider
-                for param_name in config['param']:
-                    self.log(f"Syncing {node_name}/{param_name} = {actual_value}")
-                    self.update_parameter(node_name, param_name, actual_value)
-                
-                # Call service if needed (with a small delay to let parameter update complete)
-                if config.get('service'):
-                    QTimer.singleShot(100, lambda s=config['service'], p=param_name, v=actual_value: 
-                                    self.call_trigger_service(s, p, v))
+                    # Parameter not set on the node — push the GUI default
+                    self.log(f"Param {config['param'][0]} not set on {node_name}, pushing default")
+                    self._push_slider_value_to_node(name, config)
+        except Exception as e:
+            self.log(f"Error handling param query for {node_name}: {e}")
+
+    def _push_slider_value_to_node(self, name: str, config: dict):
+        """Push the current slider value to the target node"""
+        slider = self.sliders[name]
+        value = slider.value()
+
+        has_step = config.get('step') is not None
+        is_int = isinstance(config['min'], int) and isinstance(config['max'], int) and not has_step
+
+        if is_int:
+            actual_value = int(value)
+        elif has_step:
+            actual_value = float(config['min'] + (value * config['step']))
+        else:
+            actual_value = float(config['min'] + (value / 1000.0) * (config['max'] - config['min']))
+
+        node_name = config['node']
+        for param_name in config['param']:
+            self.log(f"Pushing default {node_name}/{param_name} = {actual_value}")
+            self.update_parameter(node_name, param_name, actual_value)
+
+        if config.get('service'):
+            QTimer.singleShot(100, lambda s=config['service'], p=config['param'][0], v=actual_value:
+                              self.call_trigger_service(s, p, v))
     
     def check_recording_state(self):
         """Check if video recording is already active on startup"""
@@ -1119,7 +975,6 @@ class CameraRigGUI(QMainWindow):
             storage_path = os.path.expanduser(self.node.get_parameter('recording.storage_path').value)
             storage_id = self.node.get_parameter('recording.storage_id').value
             serialization_format = self.node.get_parameter('recording.serialization_format').value
-            qos_profile_file = self.node.get_parameter('recording.qos_profile_file').value
             
             # Create storage directory if it doesn't exist
             os.makedirs(storage_path, exist_ok=True)
@@ -1133,26 +988,12 @@ class CameraRigGUI(QMainWindow):
             # Store the bag path for later
             self.current_bag_path = bag_path
             
-            # Get QoS profile path
-            try:
-                from ament_index_python.packages import get_package_share_directory
-                pkg_share = get_package_share_directory('multi_camera_rig_gui')
-                qos_path = os.path.join(pkg_share, 'config', qos_profile_file)
-            except Exception as e:
-                self.log(f"Warning: Could not find QoS profile: {e}")
-                qos_path = None
-            
             # Build ros2 bag command
             cmd = [
                 'ros2', 'bag', 'record',
                 '-o', bag_path,
                 '-s', storage_id,
             ]
-            
-            # Add QoS profile if file exists
-            if qos_path and os.path.exists(qos_path):
-                cmd.extend(['--qos-profile-overrides-path', qos_path])
-                self.log(f"Using QoS profile: {qos_path}")
             
             # Add topics
             cmd.extend(topics)
