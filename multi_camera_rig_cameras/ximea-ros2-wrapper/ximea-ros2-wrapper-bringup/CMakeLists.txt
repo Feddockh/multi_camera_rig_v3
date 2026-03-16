@@ -14,6 +14,7 @@ find_package(std_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(camera_info_manager REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(std_srvs REQUIRED)
 
 # Find Ximea API
 find_path(XIMEA_INCLUDE_DIR NAMES m3api/xiApi.h PATHS /opt/XIMEA/include)
@@ -30,6 +31,7 @@ else()
     rclcpp
     sensor_msgs
     std_msgs
+    std_srvs
     cv_bridge
     camera_info_manager
     OpenCV)

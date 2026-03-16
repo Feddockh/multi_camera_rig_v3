@@ -11,12 +11,15 @@
 #include <camera_info_manager/camera_info_manager.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 
+#include <std_srvs/srv/trigger.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <filesystem>
 #include <cstdlib>
 #include <functional>
@@ -38,12 +41,16 @@ private:
     void publish_image(cv::Mat &image);
     rcl_interfaces::msg::SetParametersResult on_parameters_set(
         const std::vector<rclcpp::Parameter> &params);
+    void reload_ffc_callback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     // ROS 2 components
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_publisher_;
     std::shared_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_reload_ffc_;
 
     // Capture thread
     std::thread capture_thread_;
@@ -71,6 +78,7 @@ private:
     cv::Mat mid_dark_;
     cv::Mat FFC_;
     float mid_dark_mean_;
+    std::mutex ffc_mutex_;
 };
 
 #endif // XIMEA_ROS2_WRAPPER_BRINGUP_XIMEA_CAMERA_NODE_HPP_

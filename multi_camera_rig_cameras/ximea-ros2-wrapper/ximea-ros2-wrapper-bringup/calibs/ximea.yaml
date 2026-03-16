@@ -3,7 +3,7 @@
 
 image_width: 2048
 image_height: 1088
-camera_name: ximea_camera
+camera_name: ximea
 camera_matrix:
   rows: 3
   cols: 3

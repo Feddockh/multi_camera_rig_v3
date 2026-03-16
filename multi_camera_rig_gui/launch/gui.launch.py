@@ -38,6 +38,10 @@ def launch_setup(context, *args, **kwargs):
                 ],
                 'recording.storage_path': '~/tmp',
                 'recording.storage_id': 'sqlite3',
+                # FFC calibration output directory (must match ximea camera node's ffc_dir)
+                'ffc_dir': '~/tmp/ffc',
+                # XIMEA reload service — camera_name + "/reload_ffc"
+                'ximea_reload_ffc_service': '/ximea/reload_ffc',
             },
         ],
         emulate_tty=True,

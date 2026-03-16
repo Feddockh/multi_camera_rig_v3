@@ -82,6 +82,12 @@ XimeaCameraNode::XimeaCameraNode(const rclcpp::NodeOptions &options)
     param_callback_handle_ = this->add_on_set_parameters_callback(
         std::bind(&XimeaCameraNode::on_parameters_set, this, std::placeholders::_1));
 
+    // Register reload_ffc service so callers can reload calibration without restarting
+    srv_reload_ffc_ = this->create_service<std_srvs::srv::Trigger>(
+        camera_name_ + "/reload_ffc",
+        std::bind(&XimeaCameraNode::reload_ffc_callback, this,
+                  std::placeholders::_1, std::placeholders::_2));
+
     // Start capture thread for hardware-triggered images
     running_ = true;
     capture_thread_ = std::thread(&XimeaCameraNode::capture_thread_func, this);
@@ -515,13 +521,16 @@ cv::Mat XimeaCameraNode::capture_calibrated_image()
 
     // Apply software FFC if enabled and calibration files exist
     cv::Mat img;
-    if (enable_ffc_ && !dark_file_.empty() && !mid_file_.empty())
     {
-        img = apply_software_ffc(raw);
-    }
-    else
-    {
-        img = raw;
+        std::lock_guard<std::mutex> lock(ffc_mutex_);
+        if (enable_ffc_ && !dark_file_.empty() && !mid_file_.empty())
+        {
+            img = apply_software_ffc(raw);
+        }
+        else
+        {
+            img = raw;
+        }
     }
 
     return img;
@@ -596,9 +605,49 @@ rcl_interfaces::msg::SetParametersResult XimeaCameraNode::on_parameters_set(
                 }
             }
         }
+        else if (name == "enable_ffc")
+        {
+            std::lock_guard<std::mutex> lock(ffc_mutex_);
+            enable_ffc_ = p.as_bool();
+            RCLCPP_INFO(this->get_logger(), "enable_ffc set to %s",
+                        enable_ffc_ ? "true" : "false");
+        }
     }
 
     return result;
+}
+
+void XimeaCameraNode::reload_ffc_callback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    RCLCPP_INFO(this->get_logger(), "Reloading FFC calibration from: %s", ffc_dir_.c_str());
+
+    std::lock_guard<std::mutex> lock(ffc_mutex_);
+
+    // Clear existing calibration state
+    dark_file_.clear();
+    mid_file_.clear();
+    dark_ = cv::Mat();
+    mid_ = cv::Mat();
+    mid_dark_ = cv::Mat();
+    FFC_ = cv::Mat();
+    mid_dark_mean_ = 0.0f;
+
+    bool ok = init_software_ffc();
+
+    if (ok)
+    {
+        RCLCPP_INFO(this->get_logger(), "FFC calibration reloaded successfully.");
+        response->success = true;
+        response->message = "FFC calibration reloaded: dark=" + dark_file_ + ", mid=" + mid_file_;
+    }
+    else
+    {
+        RCLCPP_WARN(this->get_logger(), "Failed to reload FFC calibration.");
+        response->success = false;
+        response->message = "Failed to reload FFC calibration. Check ffc_dir and file names.";
+    }
 }
 
 int main(int argc, char *argv[])

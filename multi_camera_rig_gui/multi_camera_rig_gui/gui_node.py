@@ -18,6 +18,7 @@ from datetime import datetime
 import numpy as np
 from typing import Dict, Any, Optional
 
+import cv2
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CompressedImage
@@ -58,6 +59,9 @@ class CameraRigGUI(QMainWindow):
         self.bag_process: Optional[subprocess.Popen] = None
         self.current_bag_path: Optional[str] = None
         self._last_video_state_check = 0.0
+        self._calibration_mode = None   # None | 'dark' | 'ffc'
+        self._calibration_frames = []
+        self._calibration_timeout_timer = None
         
         # Load parameters from config
         self.load_parameters()
@@ -103,6 +107,8 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('trigger_start_service', '/trigger/start_video')
         self.node.declare_parameter('trigger_stop_service', '/trigger/stop_video')
         self.node.declare_parameter('trigger_is_running_service', '/trigger/is_video_running')
+        self.node.declare_parameter('ffc_dir', os.path.expanduser('~/ffc_calibration'))
+        self.node.declare_parameter('ximea_reload_ffc_service', '/ximea/reload_ffc')
         
         # Declare recording parameters
         self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
@@ -408,6 +414,9 @@ class CameraRigGUI(QMainWindow):
 
         is_running_service = self.node.get_parameter('trigger_is_running_service').value
         self.trigger_is_running_client = self.node.create_client(Trigger, is_running_service)
+
+        reload_ffc_service = self.node.get_parameter('ximea_reload_ffc_service').value
+        self.ximea_reload_ffc_client = self.node.create_client(Trigger, reload_ffc_service)
         
         # Parameter clients for each controllable node
         # We'll set parameters directly using set_parameters service calls
@@ -431,6 +440,7 @@ class CameraRigGUI(QMainWindow):
             cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img2.emit(cv_image)
             self._maybe_check_video_state()
+            self._collect_calibration_frame(cv_image)
         except Exception as e:
             self.node.get_logger().error(f"Error processing compressed image 2: {e}")
     
@@ -449,6 +459,7 @@ class CameraRigGUI(QMainWindow):
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.signals.image_img2.emit(cv_image)
             self._maybe_check_video_state()
+            self._collect_calibration_frame(cv_image)
         except Exception as e:
             self.node.get_logger().error(f"Error processing image 2: {e}")
     
@@ -917,14 +928,208 @@ class CameraRigGUI(QMainWindow):
             self.recording = False
     
     def on_dark_calibrate(self):
-        """Handle dark calibration button click"""
-        self.log("Dark calibration button clicked - functionality to be implemented")
-        # TODO: Implement dark calibration functionality
-    
+        """Capture 5 dark frames (lens cap on XIMEA), average and save as <timestamp>_dark.tif"""
+        if self._calibration_mode is not None:
+            self.log("Calibration already in progress — please wait.")
+            return
+        self._calibration_mode = 'dark'
+        self._calibration_frames = []
+        self.dark_cal_button.setEnabled(False)
+        self.ffc_cal_button.setEnabled(False)
+        self.log("=== Dark Calibration Started ===")
+        self.log("Please ensure the lens cap is on the XIMEA camera.")
+        self.log("Waiting for 5 dark frames from the XIMEA camera... (0/5)")
+        self._disable_ximea_ffc_then_start()
+
     def on_ffc_calibrate(self):
-        """Handle FFC calibration button click"""
-        self.log("FFC calibration button clicked - functionality to be implemented")
-        # TODO: Implement FFC calibration functionality
+        """Capture 5 FFC frames (white board at 20-30 cm from XIMEA), average and save as <timestamp>_mid.tif"""
+        if self._calibration_mode is not None:
+            self.log("Calibration already in progress — please wait.")
+            return
+        self._calibration_mode = 'ffc'
+        self._calibration_frames = []
+        self.dark_cal_button.setEnabled(False)
+        self.ffc_cal_button.setEnabled(False)
+        self.log("=== FFC Calibration Started ===")
+        self.log("Hold the white FFC calibration board 20–30 cm in front of the XIMEA camera,")
+        self.log("illuminated with the same lighting used during normal operation.")
+        self.log("Waiting for 5 frames from the XIMEA camera... (0/5)")
+        self._disable_ximea_ffc_then_start()
+
+    def _start_calibration_timeout(self):
+        """Start a 30-second watchdog; warn the user if not enough frames arrive."""
+        if self._calibration_timeout_timer is not None:
+            self._calibration_timeout_timer.stop()
+        self._calibration_timeout_timer = QTimer()
+        self._calibration_timeout_timer.setSingleShot(True)
+        self._calibration_timeout_timer.timeout.connect(self._calibration_timed_out)
+        self._calibration_timeout_timer.start(30000)
+
+    def _disable_ximea_ffc_then_start(self):
+        """Disable FFC on the XIMEA node so raw uncorrected frames are collected."""
+        ximea_node = self.slider_configs['Ximea Gain (dB)']['node']
+        try:
+            client = self.node.create_client(SetParameters, f'{ximea_node}/set_parameters')
+            if not client.wait_for_service(timeout_sec=1.0):
+                self.log("WARNING: XIMEA set_parameters service not available — "
+                         "calibration will capture already-corrected images.")
+                self._start_calibration_timeout()
+                return
+            param = RclParameter()
+            param.name = 'enable_ffc'
+            param.value = ParameterValue()
+            param.value.type = ParameterType.PARAMETER_BOOL
+            param.value.bool_value = False
+            request = SetParameters.Request()
+            request.parameters = [param]
+            future = client.call_async(request)
+            future.add_done_callback(self._ximea_ffc_disabled_callback)
+        except Exception as e:
+            self.log(f"WARNING: Could not disable XIMEA FFC: {e} — proceeding anyway.")
+            self._start_calibration_timeout()
+
+    def _ximea_ffc_disabled_callback(self, future):
+        """Called once enable_ffc=False is confirmed; starts the actual frame collection."""
+        try:
+            response = future.result()
+            if response.results and response.results[0].successful:
+                self.log("XIMEA FFC disabled — collecting raw uncorrected frames.")
+            else:
+                self.log("WARNING: Could not disable FFC on XIMEA — images may be pre-corrected.")
+        except Exception as e:
+            self.log(f"WARNING: Error disabling XIMEA FFC: {e} — proceeding anyway.")
+        self._start_calibration_timeout()
+
+    def _reenable_ximea_ffc(self):
+        """Re-enable FFC on the XIMEA node after calibration is complete."""
+        ximea_node = self.slider_configs['Ximea Gain (dB)']['node']
+        try:
+            client = self.node.create_client(SetParameters, f'{ximea_node}/set_parameters')
+            if not client.wait_for_service(timeout_sec=1.0):
+                self.log("WARNING: Could not re-enable XIMEA FFC — restart the camera node.")
+                self.log("=== Calibration Complete ===")
+                return
+            param = RclParameter()
+            param.name = 'enable_ffc'
+            param.value = ParameterValue()
+            param.value.type = ParameterType.PARAMETER_BOOL
+            param.value.bool_value = True
+            request = SetParameters.Request()
+            request.parameters = [param]
+            future = client.call_async(request)
+            future.add_done_callback(self._ximea_ffc_reenabled_callback)
+        except Exception as e:
+            self.log(f"WARNING: Could not re-enable XIMEA FFC: {e}")
+            self.log("=== Calibration Complete ===")
+
+    def _ximea_ffc_reenabled_callback(self, future):
+        """Called once enable_ffc=True is confirmed; signals end of calibration."""
+        try:
+            response = future.result()
+            if response.results and response.results[0].successful:
+                self.log("XIMEA FFC re-enabled — normal corrected operation resumed.")
+            else:
+                self.log("WARNING: Could not re-enable FFC on XIMEA — restart the camera node.")
+        except Exception as e:
+            self.log(f"WARNING: Error re-enabling XIMEA FFC: {e}")
+        self.log("=== Calibration Complete ===")
+
+    def _calibration_timed_out(self):
+        """Called when calibration watchdog fires before 5 frames were collected."""
+        if self._calibration_mode is None:
+            return
+        collected = len(self._calibration_frames)
+        self.log(f"WARNING: Calibration timed out — only {collected}/5 frames received.")
+        self.log("Ensure the XIMEA camera is publishing images and the hardware trigger is running.")
+        self._calibration_mode = None
+        self._calibration_frames = []
+        self._calibration_timeout_timer = None
+        self.dark_cal_button.setEnabled(True)
+        self.ffc_cal_button.setEnabled(True)
+
+    def _collect_calibration_frame(self, cv_image: np.ndarray):
+        """Collect a single calibration frame from img2. Triggers save when 5 frames are gathered."""
+        if self._calibration_mode is None:
+            return
+        if len(self._calibration_frames) >= 5:
+            return  # already collecting the save, ignore extra frames
+
+        # Convert to grayscale (ximea publishes mono8; bgr channels are equal)
+        if len(cv_image.shape) == 3:
+            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = cv_image
+
+        self._calibration_frames.append(gray.astype(np.float32))
+        count = len(self._calibration_frames)
+        self.log(f"Frame {count}/5 captured")
+
+        if count == 5:
+            # Schedule finalization outside this callback to avoid blocking the ROS spin
+            QTimer.singleShot(0, self._finalize_calibration)
+
+    def _finalize_calibration(self):
+        """Average the 5 collected frames and save as a grayscale TIFF."""
+        if not self._calibration_frames:
+            return
+
+        if self._calibration_timeout_timer is not None:
+            self._calibration_timeout_timer.stop()
+            self._calibration_timeout_timer = None
+
+        mode = self._calibration_mode
+        frames = self._calibration_frames
+        self._calibration_mode = None
+        self._calibration_frames = []
+
+        # Pixel-wise average of all 5 frames
+        averaged = np.mean(np.stack(frames, axis=0), axis=0).astype(np.uint8)
+
+        ffc_dir = os.path.expanduser(self.node.get_parameter('ffc_dir').value)
+        os.makedirs(ffc_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suffix = '_dark.tif' if mode == 'dark' else '_mid.tif'
+        filename = f"{timestamp}{suffix}"
+        save_path = os.path.join(ffc_dir, filename)
+
+        success = cv2.imwrite(save_path, averaged)
+
+        if success:
+            label = "Dark" if mode == 'dark' else "FFC (mid)"
+            self.log(f"{label} calibration complete — 5 frames averaged.")
+            self.log(f"Saved to: {save_path}")
+            self.log("Reloading FFC calibration on XIMEA camera node...")
+            self._reload_ximea_ffc()
+        else:
+            self.log(f"ERROR: Failed to write calibration image to: {save_path}")
+            self.log("Check that the ffc_dir path is writable.")
+            self._reenable_ximea_ffc()
+
+        self.dark_cal_button.setEnabled(True)
+        self.ffc_cal_button.setEnabled(True)
+
+    def _reload_ximea_ffc(self):
+        """Ask the XIMEA camera node to reload FFC calibration from ffc_dir."""
+        if not self.ximea_reload_ffc_client.service_is_ready():
+            self.log("WARNING: XIMEA reload_ffc service not available — restart the camera node to apply new calibration.")
+            self._reenable_ximea_ffc()
+            return
+        future = self.ximea_reload_ffc_client.call_async(Trigger.Request())
+        future.add_done_callback(self._reload_ximea_ffc_callback)
+
+    def _reload_ximea_ffc_callback(self, future):
+        """Handle response from XIMEA reload_ffc service, then re-enable FFC."""
+        try:
+            response = future.result()
+            if response.success:
+                self.log(f"XIMEA FFC reloaded: {response.message}")
+            else:
+                self.log(f"WARNING: XIMEA FFC reload failed: {response.message}")
+        except Exception as e:
+            self.log(f"ERROR calling XIMEA reload_ffc service: {e}")
+        # Re-enable FFC now that the new calibration is loaded
+        self._reenable_ximea_ffc()
     
     def toggle_bag_recording(self):
         """Toggle ROS2 bag recording"""
