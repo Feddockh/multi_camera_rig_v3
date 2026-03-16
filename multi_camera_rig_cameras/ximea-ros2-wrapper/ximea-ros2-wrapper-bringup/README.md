@@ -56,32 +56,42 @@ ros2 launch ximea-ros2-wrapper-bringup bringup_real.launch.py \
 - `gain` (double, default: 0.0): Camera gain in dB (-1.5 to 6.0)
 - `exposure_time` (int, default: 10000): Exposure time in microseconds
 - `enable_ffc` (bool, default: true): Enable flat field correction
-- `data_dir` (string, default: "~/tmp"): Directory for FFC calibration files
+- `ffc_dir` (string, default: ""): Directory containing FFC calibration files
 - `camera_info_url` (string): URL to camera calibration YAML file
 
 ## Flat Field Correction (FFC)
 
 The node supports software-based flat field correction using dark and mid (flat) field images.
 
-Calibration files should be stored in `{data_dir}/ffc/` with naming:
+Calibration files should be stored in `{ffc_dir}/` with naming:
 - `YYYYMMDD_HHMMSS_dark.tif`: Dark field image
 - `YYYYMMDD_HHMMSS_mid.tif`: Mid/flat field image
 
 The node will automatically load the most recent calibration files on startup.
 
+To reload calibration files at runtime without restarting the node, call the `reload_ffc` service:
+
+```bash
+ros2 service call /{camera_name}/reload_ffc std_srvs/srv/Trigger
+```
+
 ## Topics
 
 ### Published
 
-- `~/ximea_camera/image_raw` (sensor_msgs/Image): Raw camera images
-- `~/ximea_camera/camera_info` (sensor_msgs/CameraInfo): Camera calibration info
+- `/{camera_name}/image_raw` (sensor_msgs/Image): Raw camera images
+- `/{camera_name}/camera_info` (sensor_msgs/CameraInfo): Camera calibration info
+
+## Services
+
+- `/{camera_name}/reload_ffc` (std_srvs/Trigger): Reload FFC calibration files from `ffc_dir` at runtime
 
 ## Hardware Trigger Mode
 
 The camera is configured for **hardware trigger mode** with the following settings:
 
 - **GPI 1**: Configured as trigger input
-- **Trigger Source**: Rising edge (XI_TRG_EDGE_RISING)
+- **Trigger Source**: Falling edge (XI_TRG_EDGE_FALLING)
 - **GPO 1**: Set to exposure active output signal
 
 The node runs a dedicated capture thread that continuously waits for hardware trigger signals. When a trigger is received:
