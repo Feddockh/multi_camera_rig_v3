@@ -11,6 +11,8 @@ from launch_ros.substitutions import FindPackageShare
 
 def launch_setup(context, *args, **kwargs):
 
+    config_file_path = LaunchConfiguration('config_file').perform(context)
+
     # GUI node
     gui_node = Node(
         package='multi_camera_rig_gui',
@@ -42,6 +44,10 @@ def launch_setup(context, *args, **kwargs):
                 'ffc_dir': '~/tmp/ffc',
                 # XIMEA reload service — camera_name + "/reload_ffc"
                 'ximea_reload_ffc_service': '/ximea/reload_ffc',
+                # Push slider defaults to nodes on startup instead of reading existing values
+                'force_default_params': True,
+                # Path to gui_params.yaml so defaults can be persisted on slider change
+                'gui_config_file_path': config_file_path,
             },
         ],
         emulate_tty=True,

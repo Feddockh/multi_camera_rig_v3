@@ -109,6 +109,8 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('trigger_is_running_service', '/trigger/is_video_running')
         self.node.declare_parameter('ffc_dir', os.path.expanduser('~/ffc_calibration'))
         self.node.declare_parameter('ximea_reload_ffc_service', '/ximea/reload_ffc')
+        self.node.declare_parameter('force_default_params', False)
+        self.node.declare_parameter('gui_config_file_path', '')
         
         # Declare recording parameters
         self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
@@ -169,6 +171,7 @@ class CameraRigGUI(QMainWindow):
     def get_slider_config(self, base_name: str) -> Dict[str, Any]:
         """Extract slider configuration from parameters"""
         config = {
+            'base_name': base_name,
             'min': self.node.get_parameter(f'{base_name}.min').value,
             'max': self.node.get_parameter(f'{base_name}.max').value,
             'default': self.node.get_parameter(f'{base_name}.default').value,
@@ -510,10 +513,17 @@ class CameraRigGUI(QMainWindow):
                 self.configured_nodes.add(node_name)
     
     def sync_node_parameters(self, node_name: str):
-        """Query node's current parameter values; update sliders if set, push defaults if not"""
+        """Push slider values to node, or query-first if force_default_params is False"""
         node_sliders = {name: config for name, config in self.slider_configs.items()
                         if config['node'] == node_name}
         if not node_sliders:
+            return
+
+        if self.node.get_parameter('force_default_params').value:
+            # Force mode: push every slider's current value to the node immediately
+            for name, config in node_sliders.items():
+                self.log(f"Force-pushing {config['param'][0]} to {node_name}")
+                self._push_slider_value_to_node(name, config)
             return
 
         get_params_client = self.node.create_client(
@@ -741,7 +751,50 @@ class CameraRigGUI(QMainWindow):
         # If this parameter has an associated service (e.g., trigger services), call it
         if config.get('service'):
             self.call_trigger_service(config['service'], name, actual_value)
+
+        # Persist the new value as the default for next session
+        self._persist_slider_default(name, config, actual_value)
     
+    def _persist_slider_default(self, name: str, config: dict, value):
+        """Write the slider value back as the new default in gui_params.yaml."""
+        config_path = self.node.get_parameter('gui_config_file_path').value
+        if not config_path:
+            return
+        base_name = config.get('base_name')
+        if not base_name:
+            return
+        try:
+            with open(config_path, 'r') as f:
+                lines = f.readlines()
+
+            has_step = config.get('step') is not None
+            is_int = (isinstance(config['min'], int) and
+                      isinstance(config['max'], int) and not has_step)
+            new_val = int(round(value)) if is_int else float(value)
+
+            # Find the section block for base_name and update its `default:` line
+            in_section = False
+            section_indent = None
+            for i, line in enumerate(lines):
+                stripped = line.lstrip()
+                indent = len(line) - len(stripped)
+                if not in_section:
+                    if stripped.startswith(f'{base_name}:'):
+                        in_section = True
+                        section_indent = indent
+                else:
+                    # A non-blank, non-comment line at same or lower indent exits the section
+                    if stripped and not stripped.startswith('#') and indent <= section_indent:
+                        break
+                    if stripped.startswith('default:'):
+                        lines[i] = ' ' * indent + f'default: {new_val}\n'
+                        break
+
+            with open(config_path, 'w') as f:
+                f.writelines(lines)
+        except Exception as e:
+            self.node.get_logger().warn(f'Could not persist default for {base_name}: {e}')
+
     def update_parameter(self, node_name: str, param_name: str, value):
         """Update parameter on target node"""
         try:
