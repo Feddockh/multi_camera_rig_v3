@@ -10,7 +10,7 @@ XimeaCameraNode::XimeaCameraNode(const rclcpp::NodeOptions &options)
       mid_dark_mean_(0.0f)
 {
     // Declare parameters with defaults
-    declare_parameter("camera_name", "ximea_camera");
+    declare_parameter("camera_name", "ximea");
     declare_parameter("frame_id", "ximea_optical_frame");
     declare_parameter("gain", 0.0);
     declare_parameter("exposure_time", 10000);

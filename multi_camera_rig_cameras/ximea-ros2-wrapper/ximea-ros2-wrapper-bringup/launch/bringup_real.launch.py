@@ -20,7 +20,7 @@ def launch_setup(context, *args, **kwargs):
     with open(ximea_config_file, 'r') as f:
         ximea_config = yaml.safe_load(f)
 
-    camera_name = ximea_config.get('camera_name', 'ximea_camera')
+    camera_name = ximea_config.get('camera_name', 'ximea')
 
     # Replace ffc_dir from data_dir and camera_name
     ximea_config['ffc_dir'] = ffc_dir

@@ -1,7 +1,7 @@
 # Ximea Camera Configuration
 # Initial parameters for the Ximea camera node
 
-camera_name: "ximea_camera"
+camera_name: "ximea"
 device_id: 0
 frame_id: "ximea_optical_frame"
 
