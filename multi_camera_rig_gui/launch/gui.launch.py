@@ -38,10 +38,10 @@ def launch_setup(context, *args, **kwargs):
                     '/ximea/image_raw',
                     '/trigger/status',
                 ],
-                'recording.storage_path': '~/tmp',
+                'recording.storage_path': '~/fireblight_data/recordings',
                 'recording.storage_id': 'sqlite3',
                 # FFC calibration output directory (must match ximea camera node's ffc_dir)
-                'ffc_dir': '~/tmp/ffc',
+                'ffc_dir': '~/fireblight_data/ffc',
                 # XIMEA reload service — camera_name + "/reload_ffc"
                 'ximea_reload_ffc_service': '/ximea/reload_ffc',
                 # Push slider defaults to nodes on startup instead of reading existing values

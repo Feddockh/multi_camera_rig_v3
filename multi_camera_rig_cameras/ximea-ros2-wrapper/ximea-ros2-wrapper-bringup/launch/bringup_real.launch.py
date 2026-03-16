@@ -63,7 +63,7 @@ def generate_launch_description():
         ),
         LaunchArg(
             'ffc_dir',
-            default_value=os.path.expanduser('~/tmp/ffc'),
+            default_value=os.path.expanduser('~/fireblight/ffc'),
             description='Directory containing FFC dark/mid images. '
                         'If set, overrides data_dir parameter.',
         ),

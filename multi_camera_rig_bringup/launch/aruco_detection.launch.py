@@ -205,7 +205,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'map_frame',
-            default_value='husky/a200_base_footprint',
+            default_value='amiga/base_footprint',
             description='Map frame for ArUco marker poses'
         ),
         
