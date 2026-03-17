@@ -77,7 +77,7 @@ def launch_setup(context, *args, **kwargs):
                 'sub_qos.history': 'keep_last',
                 'sub_qos.depth': 5,
                 # Publisher QoS
-                'pub_qos.reliability': 'best_effort',
+                'pub_qos.reliability': 'reliable',
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
@@ -106,12 +106,12 @@ def launch_setup(context, *args, **kwargs):
                 # Output topic
                 'disparity_topic': '/firefly_left/disparity',
                 # Subscriber QoS settings
-                'sub_qos.reliability': 'best_effort',
+                'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
                 'sub_qos.history': 'keep_last',
                 'sub_qos.depth': 5,
                 # Publisher QoS settings
-                'pub_qos.reliability': 'best_effort',
+                'pub_qos.reliability': 'reliable',
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
@@ -176,7 +176,7 @@ def launch_setup(context, *args, **kwargs):
                 'sub_qos.history': 'keep_last',
                 'sub_qos.depth': 5,
                 # QoS publisher
-                'pub_qos.reliability': 'best_effort',
+                'pub_qos.reliability': 'reliable',
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
@@ -224,7 +224,7 @@ def launch_setup(context, *args, **kwargs):
                 'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
                 'color_by_class': True,
                 # Subscriber QoS settings
-                'sub_qos.reliability': 'best_effort',
+                'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
                 'sub_qos.history': 'keep_last',
                 'sub_qos.depth': 5,

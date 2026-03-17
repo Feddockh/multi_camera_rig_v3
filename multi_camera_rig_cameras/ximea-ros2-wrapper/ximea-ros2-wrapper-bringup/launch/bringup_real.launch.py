@@ -70,7 +70,7 @@ def generate_launch_description():
         ),
         LaunchArg(
             'pub_qos_reliability',
-            default_value='best_effort',
+            default_value='reliable',
             description='Publisher QoS reliability: best_effort or reliable',
         ),
         OpaqueFunction(function=launch_setup),

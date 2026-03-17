@@ -19,7 +19,7 @@ XimeaCameraNode::XimeaCameraNode(const rclcpp::NodeOptions &options)
     declare_parameter("trigger_timeout_ms", 5000);
     declare_parameter("ffc_dir", "");
     declare_parameter("camera_info_url", "");
-    declare_parameter("pub_qos_reliability", "best_effort");
+    declare_parameter("pub_qos_reliability", "reliable");
 
     camera_name_ = get_parameter("camera_name").as_string();
     frame_id_ = get_parameter("frame_id").as_string();
