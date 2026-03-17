@@ -111,6 +111,7 @@ class CameraRigGUI(QMainWindow):
         self.node.declare_parameter('ximea_reload_ffc_service', '/ximea/reload_ffc')
         self.node.declare_parameter('force_default_params', False)
         self.node.declare_parameter('gui_config_file_path', '')
+        self.node.declare_parameter('image_sub_qos_reliability', 'reliable')
         
         # Declare recording parameters
         self.node.declare_parameter('recording.topics', ['/firefly_left/image_raw', '/ximea/image_raw'])
@@ -375,9 +376,14 @@ class CameraRigGUI(QMainWindow):
         """Setup ROS subscriptions and service clients"""
         from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
         
-        # Use best effort QoS for low latency image streaming
+        reliability_str = self.node.get_parameter('image_sub_qos_reliability').value
+        reliability = (
+            QoSReliabilityPolicy.RELIABLE
+            if reliability_str == 'reliable'
+            else QoSReliabilityPolicy.BEST_EFFORT
+        )
         qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            reliability=reliability,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1  # Only keep the latest message
         )

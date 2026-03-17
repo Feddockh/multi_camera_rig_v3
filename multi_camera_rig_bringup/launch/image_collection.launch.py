@@ -105,7 +105,7 @@ def launch_setup(context, *args, **kwargs):
                 'sub_qos.history': 'keep_last',
                 'sub_qos.depth': 5,
                 # Publisher QoS
-                'pub_qos.reliability': 'best_effort',
+                'pub_qos.reliability': 'reliable',
                 'pub_qos.durability': 'volatile',
                 'pub_qos.history': 'keep_last',
                 'pub_qos.depth': 5,
@@ -128,7 +128,7 @@ def launch_setup(context, *args, **kwargs):
                     'image_prefix': cam_name,
                     'image_format': LaunchConfiguration('image_format'),
                     'qos_depth': 5,
-                    'qos_reliability': 'best_effort',
+                    'qos_reliability': 'reliable',
                     'qos_durability': 'volatile',
                     'qos_history': 'keep_last',
                 }]

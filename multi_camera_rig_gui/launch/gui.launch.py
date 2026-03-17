@@ -51,6 +51,8 @@ def launch_setup(context, *args, **kwargs):
                 'force_default_params': True,
                 # Path to gui_params.yaml so defaults can be persisted on slider change
                 'gui_config_file_path': config_file_path,
+                # QoS reliability for image subscriptions
+                'image_sub_qos_reliability': LaunchConfiguration('image_sub_qos_reliability'),
             },
         ],
         emulate_tty=True,
@@ -67,5 +69,8 @@ def generate_launch_description():
         DeclareLaunchArgument('config_file', 
                               default_value=PJoin([FindPackageShare('multi_camera_rig_gui'), 'config', 'gui_params.yaml']),
                               description='Path to GUI configuration YAML file'),
+        DeclareLaunchArgument('image_sub_qos_reliability',
+                              default_value='reliable',
+                              description='QoS reliability for image topic subscriptions: reliable or best_effort'),
         OpaqueFunction(function=launch_setup)
     ])
