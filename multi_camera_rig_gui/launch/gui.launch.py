@@ -35,11 +35,14 @@ def launch_setup(context, *args, **kwargs):
                 # Recording settings
                 'recording.topics': [
                     '/firefly_left/image_raw',
+                    '/firefly_right/image_raw',
+                    '/firefly_left/image_rect',
+                    '/firefly_right/image_rect',
                     '/ximea/image_raw',
                     '/trigger/status',
                 ],
                 'recording.storage_path': '~/fireblight_data/recordings',
-                'recording.storage_id': 'sqlite3',
+                'recording.storage_id': 'mcap',
                 # FFC calibration output directory (must match ximea camera node's ffc_dir)
                 'ffc_dir': '~/fireblight_data/ffc',
                 # XIMEA reload service — camera_name + "/reload_ffc"

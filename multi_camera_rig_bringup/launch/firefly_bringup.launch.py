@@ -86,43 +86,45 @@ def launch_setup(context, *args, **kwargs):
         launch_nodes.append(rectify_scale_node)
 
     # Foundation stereo matcher
-    stereo_matcher_model_dir = LaunchConfiguration('stereo_matcher_model_dir').perform(context)
-    stereo_matcher_model_trt = LaunchConfiguration('stereo_matcher_model_trt').perform(context)
-    engine_path = os.path.join(stereo_matcher_model_dir, stereo_matcher_model_trt)
-    
-    foundation_stereo_matcher_node = Node(
-        package='multi_camera_rig_reconstruction',
-        executable='foundation_stereo_matcher_node',
-        name='foundation_stereo_matcher_node',
-        parameters=[{
-            # TensorRT engine
-            'engine_path': engine_path,
-            # Input topics
-            'left_image_topic': '/firefly_left/image_rect_scaled',
-            'right_image_topic': '/firefly_right/image_rect_scaled',
-            'left_info_topic': '/firefly_left/camera_info_rect_scaled',
-            # Output topic
-            'disparity_topic': '/firefly_left/disparity',
-            # Subscriber QoS settings
-            'sub_qos.reliability': 'best_effort',
-            'sub_qos.durability': 'volatile',
-            'sub_qos.history': 'keep_last',
-            'sub_qos.depth': 5,
-            # Publisher QoS settings
-            'pub_qos.reliability': 'best_effort',
-            'pub_qos.durability': 'volatile',
-            'pub_qos.history': 'keep_last',
-            'pub_qos.depth': 5,
-            # Disparity filter: none | speckle
-            'disp_filter.mode': 'speckle',
-            # speckle params
-            'disp_filter.speckle_max_size': 120,
-            'disp_filter.speckle_range': 1.0,
-            'disp_filter.speckle_scale': 16.0,
-        }],
-        output='screen'
-    )
-    launch_nodes.append(foundation_stereo_matcher_node)
+    enable_matcher = LaunchConfiguration('enable_matcher').perform(context).lower() == 'true'
+    if enable_matcher:
+        stereo_matcher_model_dir = LaunchConfiguration('stereo_matcher_model_dir').perform(context)
+        stereo_matcher_model_trt = LaunchConfiguration('stereo_matcher_model_trt').perform(context)
+        engine_path = os.path.join(stereo_matcher_model_dir, stereo_matcher_model_trt)
+        
+        foundation_stereo_matcher_node = Node(
+            package='multi_camera_rig_reconstruction',
+            executable='foundation_stereo_matcher_node',
+            name='foundation_stereo_matcher_node',
+            parameters=[{
+                # TensorRT engine
+                'engine_path': engine_path,
+                # Input topics
+                'left_image_topic': '/firefly_left/image_rect_scaled',
+                'right_image_topic': '/firefly_right/image_rect_scaled',
+                'left_info_topic': '/firefly_left/camera_info_rect_scaled',
+                # Output topic
+                'disparity_topic': '/firefly_left/disparity',
+                # Subscriber QoS settings
+                'sub_qos.reliability': 'best_effort',
+                'sub_qos.durability': 'volatile',
+                'sub_qos.history': 'keep_last',
+                'sub_qos.depth': 5,
+                # Publisher QoS settings
+                'pub_qos.reliability': 'best_effort',
+                'pub_qos.durability': 'volatile',
+                'pub_qos.history': 'keep_last',
+                'pub_qos.depth': 5,
+                # Disparity filter: none | speckle
+                'disp_filter.mode': 'speckle',
+                # speckle params
+                'disp_filter.speckle_max_size': 120,
+                'disp_filter.speckle_range': 1.0,
+                'disp_filter.speckle_scale': 16.0,
+            }],
+            output='screen'
+        )
+        launch_nodes.append(foundation_stereo_matcher_node)
 
     # ============================
     # Detection Pipeline (Optional)
@@ -189,52 +191,54 @@ def launch_setup(context, *args, **kwargs):
     # ============================
     # Semantic Point Cloud Generation
     # ============================
-    semantic_pointcloud_node = Node(
-        package='multi_camera_rig_reconstruction',
-        executable='semantic_pointcloud_node',
-        name='semantic_pointcloud_node',
-        parameters=[{
-            # Mode selection
-            'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
-            'use_seg_detection': LaunchConfiguration('use_seg_detection').perform(context).lower() == 'true',
-            # Stereo parameters
-            'baseline': 0.06,
-            # Point cloud generation
-            'stride': 1,
-            'max_range_m': 5.0,
-            'use_background': True,
-            # Input topics
-            'disparity_topic': '/firefly_left/disparity',
-            'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
-            'image_topic': '/firefly_left/image_rect_scaled',
-            'detection_topic': '/firefly_left/detections_scaled',
-            'seg_detection_topic': '/firefly_left/instance_segmentation_scaled',
-            # Output control
-            'publish_cloud': True,
-            'publish_depth': False,
-            # Output topics
-            'cloud_topic': "/firefly_left/points2",
-            'depth_topic': '/firefly_left/depth',
-            # Semantic parameters (for semantic mode)
-            'background_class_id': -1,
-            'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
-            'color_by_class': True,
-            # Subscriber QoS settings
-            'sub_qos.reliability': 'best_effort',
-            'sub_qos.durability': 'volatile',
-            'sub_qos.history': 'keep_last',
-            'sub_qos.depth': 5,
-            # Publisher QoS settings
-            'pub_qos.reliability': 'best_effort',
-            'pub_qos.durability': 'volatile',
-            'pub_qos.history': 'keep_last',
-            'pub_qos.depth': 5,
-            # Debug
-            'debug': False,
-        }],
-        output='screen'
-    )
-    launch_nodes.append(semantic_pointcloud_node)
+    enable_pointcloud = LaunchConfiguration('enable_pointcloud').perform(context).lower() == 'true'
+    if enable_pointcloud:
+        semantic_pointcloud_node = Node(
+            package='multi_camera_rig_reconstruction',
+            executable='semantic_pointcloud_node',
+            name='semantic_pointcloud_node',
+            parameters=[{
+                # Mode selection
+                'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
+                'use_seg_detection': LaunchConfiguration('use_seg_detection').perform(context).lower() == 'true',
+                # Stereo parameters
+                'baseline': 0.06,
+                # Point cloud generation
+                'stride': 1,
+                'max_range_m': 5.0,
+                'use_background': True,
+                # Input topics
+                'disparity_topic': '/firefly_left/disparity',
+                'camera_info_topic': '/firefly_left/camera_info_rect_scaled',
+                'image_topic': '/firefly_left/image_rect_scaled',
+                'detection_topic': '/firefly_left/detections_scaled',
+                'seg_detection_topic': '/firefly_left/instance_segmentation_scaled',
+                # Output control
+                'publish_cloud': True,
+                'publish_depth': False,
+                # Output topics
+                'cloud_topic': "/firefly_left/points2",
+                'depth_topic': '/firefly_left/depth',
+                # Semantic parameters (for semantic mode)
+                'background_class_id': -1,
+                'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
+                'color_by_class': True,
+                # Subscriber QoS settings
+                'sub_qos.reliability': 'best_effort',
+                'sub_qos.durability': 'volatile',
+                'sub_qos.history': 'keep_last',
+                'sub_qos.depth': 5,
+                # Publisher QoS settings
+                'pub_qos.reliability': 'best_effort',
+                'pub_qos.durability': 'volatile',
+                'pub_qos.history': 'keep_last',
+                'pub_qos.depth': 5,
+                # Debug
+                'debug': False,
+            }],
+            output='screen'
+        )
+        launch_nodes.append(semantic_pointcloud_node)
 
     return launch_nodes
 
@@ -318,6 +322,16 @@ def generate_launch_description():
             'stereo_matcher_model_trt',
             default_value='fs_224x448_vit-small_iters5.plan',
             description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
+        ),
+        DeclareLaunchArgument(
+            'enable_matcher',
+            default_value='true',
+            description='Enable foundation stereo matcher node'
+        ),
+        DeclareLaunchArgument(
+            'enable_pointcloud',
+            default_value='true',
+            description='Enable semantic point cloud generation node'
         ),
         DeclareLaunchArgument(
             'use_semantics',
