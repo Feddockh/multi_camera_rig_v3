@@ -19,6 +19,7 @@ XimeaCameraNode::XimeaCameraNode(const rclcpp::NodeOptions &options)
     declare_parameter("trigger_timeout_ms", 5000);
     declare_parameter("ffc_dir", "");
     declare_parameter("camera_info_url", "");
+    declare_parameter("pub_qos_reliability", "best_effort");
 
     camera_name_ = get_parameter("camera_name").as_string();
     frame_id_ = get_parameter("frame_id").as_string();
@@ -58,10 +59,17 @@ XimeaCameraNode::XimeaCameraNode(const rclcpp::NodeOptions &options)
         this, camera_name_, camera_info_url);
 
     // Initialize Publishers (no "~/" in ROS 2; namespace from launch instead)
+    std::string pub_qos_str = get_parameter("pub_qos_reliability").as_string();
+    rclcpp::QoS pub_qos(10);
+    if (pub_qos_str == "reliable") {
+        pub_qos.reliable();
+    } else {
+        pub_qos.best_effort();
+    }
     image_publisher_ = create_publisher<sensor_msgs::msg::Image>(
-        camera_name_ + std::string("/image_raw"), 10);
+        camera_name_ + std::string("/image_raw"), pub_qos);
     camera_info_publisher_ = create_publisher<sensor_msgs::msg::CameraInfo>(
-        camera_name_ + std::string("/camera_info"), 10);
+        camera_name_ + std::string("/camera_info"), pub_qos);
 
     RCLCPP_INFO(this->get_logger(), "XimeaCameraNode initialized for camera: %s",
                 camera_name_.c_str());

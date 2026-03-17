@@ -24,6 +24,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Replace ffc_dir from data_dir and camera_name
     ximea_config['ffc_dir'] = ffc_dir
+    ximea_config['pub_qos_reliability'] = LaunchConfig('pub_qos_reliability').perform(context)
 
     # Replace camera_info_url from calib_dir and camera_name
     camera_info_url = f"file://{os.path.join(calib_dir, camera_name + '.yaml')}"
@@ -66,6 +67,11 @@ def generate_launch_description():
             default_value=os.path.expanduser('~/fireblight/ffc'),
             description='Directory containing FFC dark/mid images. '
                         'If set, overrides data_dir parameter.',
+        ),
+        LaunchArg(
+            'pub_qos_reliability',
+            default_value='best_effort',
+            description='Publisher QoS reliability: best_effort or reliable',
         ),
         OpaqueFunction(function=launch_setup),
     ])
