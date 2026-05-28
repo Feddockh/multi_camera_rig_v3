@@ -630,8 +630,8 @@ bool SemanticPointCloud::processSemanticPointCloud(
             else
             {
                 // Color by image RGB
-                const cv::Vec3b bgr = image_cv->image.at<cv::Vec3b>(v, u);
-                rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]);
+                const cv::Vec3b rgb = image_cv->image.at<cv::Vec3b>(v, u);
+                rgb_f = packRGBFloat(rgb[0], rgb[1], rgb[2]);
             }
 
             uint8_t *ptr = cloud.data.data() + idx * cloud.point_step;
@@ -928,14 +928,16 @@ bool SemanticPointCloud::processSemanticPointCloudInstances(
             const float conf = confidences[pix];
 
             float rgb_f;
+            // RCLCPP_INFO(logger_, "Point: X=%.2f Y=%.2f Z=%.2f class_id=%d conf=%.2f", X, Y, Zf, class_id, conf);
+            // RCLCPP_INFO(logger_, "Color by class: %s", config_.color_by_class ? "true" : "false");
             if (config_.color_by_class)
             {
                 rgb_f = classIdToRGBFloat(class_id);
             }
             else
             {
-                const cv::Vec3b bgr = image_cv->image.at<cv::Vec3b>(v, u);
-                rgb_f = packRGBFloat(bgr[2], bgr[1], bgr[0]);
+                const cv::Vec3b rgb = image_cv->image.at<cv::Vec3b>(v, u);
+                rgb_f = packRGBFloat(rgb[0], rgb[1], rgb[2]);
             }
 
             uint8_t *ptr = cloud.data.data() + out_i * cloud.point_step;

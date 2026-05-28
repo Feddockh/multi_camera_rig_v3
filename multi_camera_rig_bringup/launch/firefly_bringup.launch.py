@@ -222,7 +222,7 @@ def launch_setup(context, *args, **kwargs):
                 # Semantic parameters (for semantic mode)
                 'background_class_id': -1,
                 'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
-                'color_by_class': True,
+                'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
                 # Subscriber QoS settings
                 'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
@@ -342,6 +342,11 @@ def generate_launch_description():
             'use_seg_detection',
             default_value='true',
             description='Use segmentation detections (true) or just bounding boxes (false) for semantic point cloud coloring'
+        ),
+        DeclareLaunchArgument(
+            'color_by_class',
+            default_value='true',
+            description='Color point cloud by class (true) or instance (false)'
         ),
         
         # ============================
