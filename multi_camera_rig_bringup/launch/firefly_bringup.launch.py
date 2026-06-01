@@ -370,7 +370,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'conf_thresh',
             default_value='0.3',
-            description='Confidence threshold for detection filtering'
+            description='Confidence threshold for detection filtering. Also the threshold for considering a detection as "background" in semantic point cloud generation.'
         ),
         
         OpaqueFunction(function=launch_setup)

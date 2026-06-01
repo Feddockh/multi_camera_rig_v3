@@ -27,7 +27,6 @@ Main launch file for Firefly stereo camera system with detection and reconstruct
 - `use_gazebo` - Switch between simulation (true) and real hardware (false)
 - `enable_detection` - Enable/disable YOLOv8 object detection
 - `use_semantics` - Enable semantic point cloud generation
-- `detect_markers` - Enable ArUco marker detection for ground truth generation
 
 **Usage:**
 
@@ -44,11 +43,6 @@ ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_gazebo:=true
 With RViz visualization:
 ```bash
 ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_rviz:=true
-```
-
-ArUco ground truth generation:
-```bash
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py detect_markers:=true
 ```
 
 ## Dependencies
@@ -101,15 +95,4 @@ ros2 run multi_camera_rig_bringup image_saver_node --ros-args \
   -p image_format:=png
 ```
 
-### aruco_detection_node
-Detects ArUco markers and estimates their 3D pose for ground truth generation.
-
-**Example:**
-```bash
-ros2 run multi_camera_rig_bringup aruco_detection_node --ros-args \
-  -p image_topic:=/firefly_left/image_rect \
-  -p camera_info_topic:=/firefly_left/camera_info_rect \
-  -p dictionary:=DICT_4X4_50 \
-  -p marker_size:=0.05 \
-  -p marker_output_file:=aruco_gt.yaml
-```
+Ground-truth generation now lives outside this package; `multi_camera_rig_bringup` only handles sensing, detection, and reconstruction.
