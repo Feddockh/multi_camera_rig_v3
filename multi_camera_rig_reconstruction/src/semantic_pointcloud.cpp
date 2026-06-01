@@ -228,11 +228,12 @@ bool SemanticPointCloud::processNormalPointCloud(
         RCLCPP_INFO(logger_, "[SemanticPointCloud] Starting point counting (stride=%d, maxR=%.2f)", s, maxR);
 
     // Count valid points
+    const int u_start = config_.left_col_crop;
     size_t n_valid = 0;
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start; u < out_w; u += s)
         {
             const float d = row[u];
             if (d <= 0.0f)
@@ -292,7 +293,7 @@ bool SemanticPointCloud::processNormalPointCloud(
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start; u < out_w; u += s)
         {
             const float d = row[u];
             bool use_max_range = false;
@@ -496,11 +497,12 @@ bool SemanticPointCloud::processSemanticPointCloud(
         RCLCPP_INFO(logger_, "[SemanticPointCloud] Starting point counting (stride=%d, maxR=%.2f)", s, maxR);
 
     // Count valid points
+    const int u_start_sem = config_.left_col_crop;
     size_t n_valid = 0;
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start_sem; u < out_w; u += s)
         {
             const float d = row[u];
             if (d <= 0.0f)
@@ -574,7 +576,7 @@ bool SemanticPointCloud::processSemanticPointCloud(
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start_sem; u < out_w; u += s)
         {
             const float d = row[u];
             bool use_max_range = false;
@@ -819,11 +821,12 @@ bool SemanticPointCloud::processSemanticPointCloudInstances(
     const int s = std::max(1, config_.stride);
 
     // Count valid points
+    const int u_start_inst = config_.left_col_crop;
     size_t n_valid = 0;
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start_inst; u < out_w; u += s)
         {
             const float d = row[u];
             if (d <= 0.0f)
@@ -888,7 +891,7 @@ bool SemanticPointCloud::processSemanticPointCloudInstances(
     for (int v = 0; v < out_h; v += s)
     {
         const float *row = disp_cv->image.ptr<float>(v);
-        for (int u = 0; u < out_w; u += s)
+        for (int u = u_start_inst; u < out_w; u += s)
         {
             const float d = row[u];
             bool use_max_range = false;

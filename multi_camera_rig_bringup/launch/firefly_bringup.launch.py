@@ -208,6 +208,7 @@ def launch_setup(context, *args, **kwargs):
                 'stride': 1,
                 'max_range_m': 5.0,
                 'use_background': True,
+                'left_col_crop': 40,
                 # Input topics
                 'disparity_topic': '/firefly_left/disparity',
                 'camera_info_topic': '/firefly_left/camera_info_rect_scaled',

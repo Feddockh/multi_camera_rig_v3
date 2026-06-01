@@ -44,6 +44,7 @@ struct SemanticPointCloudConfig
     int stride = 2;
     double max_range_m = 10.0;
     bool use_background = false;
+    int left_col_crop{0};
 
     // Output control
     bool publish_cloud = true;

@@ -32,6 +32,7 @@ public:
         config.color_by_class = declare_parameter<bool>("color_by_class", false);
         config.publish_cloud = declare_parameter<bool>("publish_cloud", true);
         config.publish_depth = declare_parameter<bool>("publish_depth", false);
+        config.left_col_crop = declare_parameter<int>("left_col_crop", 0);
 
         debug_ = declare_parameter<bool>("debug", false);
 
