@@ -122,6 +122,7 @@ def launch_setup(context, *args, **kwargs):
                 'disp_filter.speckle_max_size': 120,
                 'disp_filter.speckle_range': 1.0,
                 'disp_filter.speckle_scale': 16.0,
+                'disp_filter.min_disparity': 6.5,
             }],
             output='screen'
         )

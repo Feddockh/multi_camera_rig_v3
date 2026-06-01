@@ -53,9 +53,6 @@ void FoundationStereoMatcher::applyDisparityFilter(cv::Mat &disparity)
 {
     auto mode = multi_camera_rig_common::toLower(config_.disp_filter_mode);
     
-    if (mode == "none")
-        return;
-
     // Normalize invalids: treat <=0 as invalid
     for (int v = 0; v < disparity.rows; ++v)
     {
@@ -66,6 +63,23 @@ void FoundationStereoMatcher::applyDisparityFilter(cv::Mat &disparity)
                 row[u] = 0.0f;
         }
     }
+
+    // Zero out near-zero disparities (depth >> max_range)
+    if (config_.min_disparity > 0.0f)
+    {
+        for (int v = 0; v < disparity.rows; ++v)
+        {
+            float *row = disparity.ptr<float>(v);
+            for (int u = 0; u < disparity.cols; ++u)
+            {
+                if (row[u] > 0.0f && row[u] < config_.min_disparity)
+                    row[u] = 0.0f;
+            }
+        }
+    }
+
+    if (mode == "none")
+        return;
 
     if (mode == "speckle")
     {

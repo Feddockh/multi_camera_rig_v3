@@ -53,6 +53,8 @@ public:
         config.speckle_max_size = declare_parameter<int>("disp_filter.speckle_max_size", 120);
         config.speckle_range = declare_parameter<double>("disp_filter.speckle_range", 1.0);
         config.speckle_scale = declare_parameter<double>("disp_filter.speckle_scale", 16.0);
+        config.min_disparity = static_cast<float>(
+            declare_parameter<double>("disp_filter.min_disparity", 0.0));
 
         // Create processor
         try

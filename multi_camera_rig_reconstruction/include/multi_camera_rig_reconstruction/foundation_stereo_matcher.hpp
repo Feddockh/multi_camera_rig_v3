@@ -17,11 +17,12 @@ struct FoundationStereoMatcherConfig
 {
     std::string engine_path;
     
-    // Disparity filter options (speckle only)
+    // Disparity filter options
     std::string disp_filter_mode{"none"}; // "none" or "speckle"
     int speckle_max_size{120};
-    double speckle_range{1.0};  // in disparity pixels
-    double speckle_scale{16.0}; // float->fixed conversion scale
+    double speckle_range{1.0};   // in disparity pixels
+    double speckle_scale{16.0};  // float->fixed conversion scale
+    float min_disparity{0.0f};   // pixels below this are set to 0 (depth > max_range)
 };
 
 /**
