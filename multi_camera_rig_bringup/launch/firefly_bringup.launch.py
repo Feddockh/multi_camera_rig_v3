@@ -71,6 +71,7 @@ def launch_setup(context, *args, **kwargs):
                 'output_width': output_width,
                 'output_height': output_height,
                 'interpolation': 'linear',
+                'decimation_factor': int(LaunchConfiguration('decimation_factor').perform(context)),
                 # Subscriber QoS
                 'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
@@ -322,6 +323,11 @@ def generate_launch_description():
             'stereo_matcher_model_trt',
             default_value='fs_224x448_vit-small_iters5.plan',
             description='TensorRT engine file for the foundation stereo model (must match the output resolution)',
+        ),
+        DeclareLaunchArgument(
+            'decimation_factor',
+            default_value='1',
+            description='Process every Nth frame (1 = all frames, 2 = every other frame, etc.)'
         ),
         DeclareLaunchArgument(
             'enable_matcher',
