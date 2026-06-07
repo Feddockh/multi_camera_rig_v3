@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
     <!-- Gazebo (Ignition) sensor plugins for Firefly stereo camera -->
-    <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly frame_rate:=5">
+    <xacro:macro name="firefly_camera_gazebo" params="namespace:=firefly frame_rate:=1">
 
         <!-- Sensors plugin required for Ignition Gazebo camera simulation -->
         <!-- We added this in the .sdf file for the world, but it can also be added here -->

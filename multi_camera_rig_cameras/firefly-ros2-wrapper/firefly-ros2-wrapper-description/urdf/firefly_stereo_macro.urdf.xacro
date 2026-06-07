@@ -5,7 +5,7 @@
     <xacro:include filename="$(find firefly-ros2-wrapper-description)/urdf/firefly_stereo_gazebo.urdf.xacro"/>
 
     <!-- Macro Definition -->
-    <xacro:macro name="firefly_camera" params="use_gazebo:=true namespace:=firefly frame_rate:=5">
+    <xacro:macro name="firefly_camera" params="use_gazebo:=true namespace:=firefly frame_rate:=1">
 
         <!-- Link: camera body -->
         <link name="firefly_camera_link">
