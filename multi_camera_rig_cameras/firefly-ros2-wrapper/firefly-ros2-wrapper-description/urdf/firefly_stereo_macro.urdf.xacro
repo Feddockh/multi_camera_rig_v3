@@ -12,7 +12,7 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="file://$(find firefly-ros2-wrapper-description)/meshes/firefly-stereo.dae" scale="1 1 1"/>
+                    <mesh filename="file://$(find firefly-ros2-wrapper-description)/meshes/FFS_Camera.obj" scale="1 1 1"/>
                 </geometry>
             </visual>
             <collision>

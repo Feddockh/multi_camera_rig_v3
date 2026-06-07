@@ -9,7 +9,7 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
-                    <mesh filename="file://$(find ximea-ros2-wrapper-description)/meshes/Ximea_Camera_EO_Lens.dae" scale="1 1 1"/>
+                    <mesh filename="file://$(find ximea-ros2-wrapper-description)/meshes/Ximea_Camera_EO_Lens.obj" scale="1 1 1"/>
                 </geometry>
             </visual>
             <collision>
