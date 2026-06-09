@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace multi_camera_rig_detection
@@ -217,8 +217,8 @@ inline void parseYoloCxCyWhClassScores(const float *out,
         class_ids.emplace_back(best_cls);
     }
 
-    // NMS per class
-    std::unordered_map<int, std::vector<int>> by_class;
+    // NMS per class (std::map gives deterministic iteration order by class id)
+    std::map<int, std::vector<int>> by_class;
     for (int i = 0; i < (int)class_ids.size(); ++i)
         by_class[class_ids[i]].push_back(i);
 
