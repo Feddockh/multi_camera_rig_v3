@@ -47,7 +47,7 @@ public:
         auto out_rect_scaled_image_topic = declare_parameter<std::string>("out_rect_scaled_image_topic", "image_rect_scaled");
         auto out_rect_scaled_info_topic = declare_parameter<std::string>("out_rect_scaled_info_topic", "camera_info_rect_scaled");
         publish_scaled_ = declare_parameter<bool>("publish_scaled", true);
-        decimation_factor_ = declare_parameter<int>("decimation_factor", 1);
+        decimation_factor_ = declare_parameter<double>("decimation_factor", 1.0);
 
         // Processor config
         int output_width = declare_parameter<int>("output_width", 896);
@@ -102,7 +102,9 @@ private:
     {
         std::lock_guard<std::mutex> lk(mtx_);
 
-        if (++frame_counter_ % decimation_factor_ != 0) return;
+        phase_ += 1.0;
+        if (phase_ < decimation_factor_) return;
+        phase_ -= decimation_factor_;
         
         // Update camera info
         processor_->updateCameraInfo(*info_msg);
@@ -177,8 +179,8 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rect_scaled_img_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rect_scaled_info_pub_;
     bool publish_scaled_;
-    int decimation_factor_;
-    int frame_counter_ = 0;
+    double decimation_factor_;
+    double phase_ = 0.0;
 };
 
 int main(int argc, char **argv)

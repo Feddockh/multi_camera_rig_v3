@@ -71,7 +71,7 @@ def launch_setup(context, *args, **kwargs):
                 'output_width': output_width,
                 'output_height': output_height,
                 'interpolation': 'linear',
-                'decimation_factor': int(LaunchConfiguration('decimation_factor').perform(context)),
+                'decimation_factor': float(LaunchConfiguration('decimation_factor').perform(context)),
                 # Subscriber QoS
                 'sub_qos.reliability': 'reliable',
                 'sub_qos.durability': 'volatile',
