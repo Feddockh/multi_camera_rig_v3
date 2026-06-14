@@ -49,8 +49,8 @@ public:
         // Disparity filter params
         FoundationStereoMatcherConfig config;
         config.engine_path = engine_path;
-        config.disp_filter_mode = declare_parameter<std::string>("disp_filter.mode", "none");
-        config.speckle_max_size = declare_parameter<int>("disp_filter.speckle_max_size", 120);
+        config.disp_filter_mode = declare_parameter<std::string>("disp_filter.mode", "speckle");
+        config.speckle_max_size = declare_parameter<int>("disp_filter.speckle_max_size", 50);
         config.speckle_range = declare_parameter<double>("disp_filter.speckle_range", 1.0);
         config.speckle_scale = declare_parameter<double>("disp_filter.speckle_scale", 16.0);
         config.min_disparity = static_cast<float>(
