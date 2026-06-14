@@ -119,8 +119,8 @@ def launch_setup(context, *args, **kwargs):
                 # Disparity filter: none | speckle
                 'disp_filter.mode': 'speckle',
                 # speckle params
-                'disp_filter.speckle_max_size': 120,
-                'disp_filter.speckle_range': 1.0,
+                'disp_filter.speckle_max_size': 30,
+                'disp_filter.speckle_range': 2.0,
                 'disp_filter.speckle_scale': 16.0,
                 'disp_filter.min_disparity': 6.5,
             }],
@@ -224,7 +224,7 @@ def launch_setup(context, *args, **kwargs):
                 'depth_topic': '/firefly_left/depth',
                 # Semantic parameters (for semantic mode)
                 'background_class_id': -1,
-                'background_confidence': float(LaunchConfiguration('conf_thresh').perform(context)),
+                'background_confidence': float(LaunchConfiguration('background_conf').perform(context)),
                 'color_by_class': LaunchConfiguration('color_by_class').perform(context).lower() == 'true',
                 # Subscriber QoS settings
                 'sub_qos.reliability': 'reliable',
@@ -378,7 +378,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'conf_thresh',
             default_value='0.3',
-            description='Confidence threshold for detection filtering. Also the threshold for considering a detection as "background" in semantic point cloud generation.'
+            description='Confidence threshold for detection filtering.'
+        ),
+        DeclareLaunchArgument(
+            'background_conf',
+            default_value='0.3',
+            description='Background confidence for semantic fusion in the occupancy map'
         ),
         
         OpaqueFunction(function=launch_setup)
