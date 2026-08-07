@@ -13,8 +13,8 @@
     # Frame rate slider settings (Hz)
     frame_rate:
       min: 1
-      max: 20
-      default: 3
+      max: 5
+      default: 4
       node: "/trigger_node"
       param:
         - "frame_rate_hz"

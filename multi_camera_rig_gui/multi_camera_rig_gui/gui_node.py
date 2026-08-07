@@ -132,8 +132,8 @@ class CameraRigGUI(QMainWindow):
         
         # Declare frame rate parameters
         self.node.declare_parameter('frame_rate.min', 1)
-        self.node.declare_parameter('frame_rate.max', 20)
-        self.node.declare_parameter('frame_rate.default', 20)
+        self.node.declare_parameter('frame_rate.max', 5)
+        self.node.declare_parameter('frame_rate.default', 5)
         self.node.declare_parameter('frame_rate.node', '/trigger_node')
         self.node.declare_parameter('frame_rate.param', ['frame_rate_hz'])
         self.node.declare_parameter('frame_rate.service', '/trigger/set_frame_rate')
