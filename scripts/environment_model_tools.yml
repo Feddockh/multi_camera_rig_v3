@@ -1,0 +1,31 @@
+name: model_tools
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # FoundationStereo ONNX export (external/FoundationStereo/scripts/make_onnx.py)
+      - torch==2.4.1
+      - torchvision==0.19.1
+      - torchaudio==2.4.1
+      - numpy
+      - scikit-image
+      - omegaconf
+      - opencv-python-headless   # avoid GUI/GTK conflicts
+      - imgaug
+      - ninja
+      - timm
+      - albumentations
+      - scipy
+      - joblib
+      - scikit-learn
+      - ruamel.yaml
+      - trimesh
+      - pyyaml
+      - imageio
+      - open3d
+      - transformations
+      - einops
+      - xformers==0.0.28.post1
+      - huggingface-hub

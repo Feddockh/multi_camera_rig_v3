@@ -17,6 +17,7 @@ For multi-input models, shapes apply to all 4D inputs.
 */
 
 #include <NvInfer.h>
+#include <NvInferVersion.h>
 #include <NvOnnxParser.h>
 #include <cuda_runtime.h>
 
@@ -155,9 +156,14 @@ int main(int argc, char** argv) {
       nvinfer1::createInferBuilder(logger));
   if (!builder) throw std::runtime_error("createInferBuilder failed");
 
-  // Create network with explicit batch
+  // TensorRT 10+ removed NetworkDefinitionCreationFlag::kEXPLICIT_BATCH because explicit
+  // batch is now the only supported mode; pre-10 still requires the flag to opt in.
+#if NV_TENSORRT_MAJOR >= 10
+  const uint32_t flags = 0U;
+#else
   const uint32_t flags =
       1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+#endif
   std::unique_ptr<nvinfer1::INetworkDefinition, TrtDeleter<nvinfer1::INetworkDefinition>> network(
       builder->createNetworkV2(flags));
   if (!network) throw std::runtime_error("createNetworkV2 failed");
@@ -185,13 +191,20 @@ int main(int argc, char** argv) {
   config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 8ULL << 30);  // 8GB
   config->setBuilderOptimizationLevel(3);
 
-  // Enable FP16 if available
+  // TensorRT 11 made networks "strongly typed": precision now follows the ONNX model's
+  // own tensor types instead of being forced via BuilderFlag::kFP16, and
+  // IBuilder::platformHasFastFp16() was removed. Pre-11 still needs the explicit opt-in.
+#if NV_TENSORRT_MAJOR >= 11
+  std::cerr << "[INFO] TensorRT " << NV_TENSORRT_MAJOR
+            << " networks are strongly typed; precision follows the ONNX model's tensor types\n";
+#else
   if (builder->platformHasFastFp16()) {
     config->setFlag(nvinfer1::BuilderFlag::kFP16);
     std::cerr << "[INFO] FP16 enabled\n";
   } else {
     std::cerr << "[INFO] FP16 not available on this platform\n";
   }
+#endif
 
   // Create optimization profile
   nvinfer1::IOptimizationProfile* profile = builder->createOptimizationProfile();
