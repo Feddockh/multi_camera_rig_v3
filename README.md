@@ -59,8 +59,17 @@ git commit -m "Update submodules"
 The `multi_camera_rig_detection` and `multi_camera_rig_reconstruction` packages require **CUDA** and **TensorRT** to build their inference nodes (`yolo_trt_node`, `foundation_stereo_matcher_node`). If CUDA or TensorRT is not found on your system, these targets are automatically skipped and a warning is printed during CMake configuration.
 
 To enable them, install:
-- [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (tested with CUDA 11/12)
+- [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (tested with CUDA 11/12, and CUDA 13.3)
 - [TensorRT](https://developer.nvidia.com/tensorrt) — ensure `libnvinfer` and `libnvonnxparser` are on the library path (typically under `/usr/lib/x86_64-linux-gnu/` or `/usr/local/cuda/`)
+
+**Verified configurations:**
+| TensorRT | CUDA | Driver | GPU |
+|---|---|---|---|
+| 10.9.0.34 (.deb) | 11/12 | — | NVIDIA GeForce RTX 4090 |
+| 11.2.1.2 (.deb) | 13.3 | 610.43.02 | NVIDIA GeForce RTX 2060 |
+
+> `nvidia-smi` failing or CUDA reporting no device even though the driver is installed? See
+> [Troubleshooting](#troubleshooting).
 
 ### Optional: Spinnaker SDK (FLIR Firefly cameras)
 
@@ -90,7 +99,128 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-### 2. FoundationStereo Model Setup
+### 2. Download & Compile Models
+
+Model preparation has three stages: download pretrained weights, build the FoundationStereo
+ONNX model from its checkpoint, then compile both ONNX models into TensorRT engines. Models
+are listed in [`scripts/models_manifest.py`](scripts/models_manifest.py) — add or swap in
+other models by editing that file.
+
+**Step 1 — Download pretrained weights** (prompts with sizes before downloading anything):
+```bash
+cd ~/ros2_ws/src/multi_camera_rig_v3
+python3 scripts/download_models.py --all
+```
+This downloads the FoundationStereo ViT-Small (11-33-40) checkpoint into
+`external/FoundationStereo/pretrained_models/11-33-40/` and the YOLO segmentation ONNX model
+into `multi_camera_rig_detection/models/`.
+
+**Step 2 — Build the FoundationStereo ONNX model**
+
+FoundationStereo is distributed as a PyTorch checkpoint, not ONNX, so it needs to be exported
+first. This uses the same isolated `model_tools` conda environment as other model tooling in
+this repo, so its dependencies (PyTorch, CUDA wheels, etc.) never touch the system Python that
+`colcon`/ROS2 rely on.
+```bash
+conda env create -f scripts/environment_model_tools.yml   # one-time setup
+conda activate model_tools
+
+cd external/FoundationStereo
+XFORMERS_DISABLED=1 python scripts/make_onnx.py \
+  --save_path ../../multi_camera_rig_reconstruction/models/fs_224x448_vit-small_iters5.onnx \
+  --ckpt_dir ./pretrained_models/11-33-40/model_best_bp2.pth \
+  --height 224 --width 448 --valid_iters 5
+cd ../..
+
+conda deactivate
+```
+Mixed precision is off by default (no extra flag needed) — TensorRT 11+ builds strongly-typed
+engines and has no low-precision kernel for some layers in this model, so a mixed-precision
+export fails to compile. See `MODIFICATIONS.md` in the FoundationStereo submodule for details.
+
+**Step 3 — Compile to TensorRT** (run from the repo root):
+```bash
+./multi_camera_rig_common/tools/build_tool.sh
+./multi_camera_rig_common/tools/make_tensorrt \
+  multi_camera_rig_reconstruction/models/fs_224x448_vit-small_iters5.onnx \
+  multi_camera_rig_reconstruction/models/fs_224x448_vit-small_iters5.plan
+./multi_camera_rig_common/tools/make_tensorrt \
+  multi_camera_rig_detection/models/best_lab_seg_v2.onnx \
+  multi_camera_rig_detection/models/best_lab_seg_v2.plan
+```
+
+## Running the System
+
+### Quick Start
+
+**Full Pipeline (Real Hardware):**
+```bash
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py
+```
+
+**Full Pipeline (Simulation):**
+```bash
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_gazebo:=true
+```
+
+**Full App (Cameras + Rig Model + GUI + RViz, single unit):**
+```bash
+ros2 launch multi_camera_rig_bringup app.launch.py
+```
+Brings up `firefly_bringup.launch.py`, the Ximea camera, the rig's robot model
+(`robot_state_publisher`/`joint_state_publisher`), the control GUI, and an RViz
+window showing the rig model and the semantic point cloud
+(`/firefly_left/points2`) all together. Closing the GUI window or the RViz
+window shuts everything else down.
+
+To launch it from a single desktop icon instead, run this once:
+```bash
+./multi_camera_rig_bringup/scripts/install_desktop_app.sh
+```
+This installs a "Multi-Camera Demo App" icon into the GNOME app menu and onto
+your Desktop (re-run it any time, e.g. after moving the repo, to refresh the
+install).
+
+### Camera Only
+
+**Real Hardware:**
+```bash
+ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py
+```
+
+**Simulation:**
+```bash
+ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py use_gazebo:=true
+```
+
+### Configuration Options
+
+```bash
+# Disable detection (reconstruction only)
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py enable_detection:=false
+
+# Non-semantic pointcloud
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_semantics:=false
+
+# Custom resolution
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
+  output_width:=896 output_height:=672
+
+# Custom models
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
+  detection_model_trt:=custom.plan \
+  stereo_matcher_model_trt:=custom_stereo.plan
+
+# ArUco ground truth generation
+ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py detect_markers:=true
+```
+
+## Custom / Advanced Model Setup
+
+The steps below are only needed if you're training/exporting your own weights instead of
+using the pretrained models from [Download & Compile Models](#2-download--compile-models).
+
+### FoundationStereo Model Setup
 
 **Download Pre-trained Weights:**
 - [ViT-Large (23-51-11)](https://drive.google.com/drive/folders/1VhPebc_mMxWKccrv7pdQLTvXYVcLYpsf) - Best accuracy
@@ -105,7 +235,7 @@ conda env create -f environment_ros2.yml  # Python 3.10 for ROS2 compatibility
 conda activate foundation_stereo_ros2
 ```
 
-### 3. Model Conversion Pipeline
+### Model Conversion Pipeline
 
 **Convert PyTorch → ONNX → TensorRT**
 
@@ -142,59 +272,6 @@ yolo export model=/path/to/best.pt \
 **Place Models:**
 - Detection: `multi_camera_rig_detection/models/*.plan`
 - Stereo: `multi_camera_rig_reconstruction/models/*.plan`
-
-## Running the System
-
-### Quick Start
-
-**Full Pipeline (Real Hardware):**
-```bash
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py
-```
-
-**Full Pipeline (Simulation):**
-```bash
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_gazebo:=true
-```
-
-**With Visualization:**
-```bash
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_rviz:=true
-```
-
-### Camera Only
-
-**Real Hardware:**
-```bash
-ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py
-```
-
-**Simulation:**
-```bash
-ros2 launch firefly-ros2-wrapper-bringup bringup.launch.py use_gazebo:=true
-```
-
-### Configuration Options
-
-```bash
-# Disable detection (reconstruction only)
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py enable_detection:=false
-
-# Non-semantic pointcloud
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py use_semantics:=false
-
-# Custom resolution
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
-  output_width:=896 output_height:=672
-
-# Custom models
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py \
-  detection_model_trt:=custom.plan \
-  stereo_matcher_model_trt:=custom_stereo.plan
-
-# ArUco ground truth generation
-ros2 launch multi_camera_rig_bringup firefly_bringup.launch.py detect_markers:=true
-```
 
 ## Key Topics
 
@@ -245,7 +322,45 @@ source ~/ros2_ws/install/setup.bash
 ls multi_camera_rig_detection/models/
 ls multi_camera_rig_reconstruction/models/
 ```
-We used tensorrt 10.9.0.34 from the .deb install following this guide: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html
+Install TensorRT via the .deb install following this guide: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html
+See [Verified configurations](#optional-cuda--tensorrt) for TensorRT/CUDA/driver combinations this repo has been tested with.
+
+**`nvidia-smi` fails / CUDA reports "no CUDA-capable device is detected" despite the driver being installed:**
+
+On systems with Secure Boot enabled, an out-of-tree DKMS driver (like `nvidia-dkms`) builds a
+kernel module signed with a locally generated key that the kernel doesn't trust yet, so the
+module silently fails to load. Check whether this is the cause:
+```bash
+mokutil --sb-state          # "SecureBoot enabled"?
+dmesg | grep -i nvidia      # no output at all = module never loaded
+```
+Fix by enrolling the DKMS signing key into Secure Boot's Machine Owner Key (MOK) database:
+```bash
+sudo mokutil --import /var/lib/shim-signed/mok/MOK.der
+sudo reboot
+```
+On reboot, a blue **MOK Manager** screen appears before the OS boots — select **Enroll MOK →
+Continue → Yes**, enter the password you set above, then let it reboot again. After that,
+`nvidia-smi` should show your GPU.
+
+**`conda: command not found` (needed for Step 2 of [Download & Compile Models](#2-download--compile-models)):**
+
+Install Miniconda first:
+```bash
+curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b -p "$HOME/miniconda3"
+source "$HOME/miniconda3/etc/profile.d/conda.sh"   # or open a new shell after `conda init`
+```
+This repo's conda environments use the `conda-forge` channel, so no Anaconda Terms of Service
+acceptance is needed.
+
+**TensorRT compile fails with `No low-precision conv kernel available for this strongly-typed Conv/ConvTranspose` (TensorRT 11+):**
+
+TensorRT 11+ networks are strongly typed: op precision comes from the ONNX graph itself rather
+than a builder flag. If a model's graph specifies FP16 for a layer your GPU/TensorRT combo has
+no low-precision kernel for, `make_tensorrt` fails outright instead of falling back to FP32 for
+that op. FoundationStereo hits this exact issue if exported with mixed precision, which is why
+[Step 2](#2-download--compile-models) exports it with mixed precision off by default.
 
 ## License
 

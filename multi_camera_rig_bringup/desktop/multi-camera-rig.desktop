@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Multi-Camera Demo App
+Comment=Launch the camera rig, GUI, and RViz together; closing GUI or RViz stops everything
+Exec=x-terminal-emulator -e /home/hayden/cmu/kantor_lab/ros2_ws/src/multi_camera_rig_v3/multi_camera_rig_bringup/scripts/launch_camera_rig_app.sh
+Icon=/home/hayden/.local/share/icons/hicolor/scalable/apps/multi-camera-rig.svg
+Terminal=false
+Categories=Development;
