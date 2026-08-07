@@ -208,7 +208,7 @@ def launch_setup(context, *args, **kwargs):
                 # Point cloud generation
                 'stride': 1,
                 'max_range_m': 5.0,
-                'use_background': True,
+                'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
                 'left_col_crop': 40,
                 # Input topics
                 'disparity_topic': '/firefly_left/disparity',
@@ -356,7 +356,12 @@ def generate_launch_description():
             default_value='true',
             description='Color point cloud by class (true) or instance (false)'
         ),
-        
+        DeclareLaunchArgument(
+            'use_background',
+            default_value='true',
+            description='Include background points (clamped to max_range_m) in the point cloud'
+        ),
+
         # ============================
         # Detection Parameters
         # ============================

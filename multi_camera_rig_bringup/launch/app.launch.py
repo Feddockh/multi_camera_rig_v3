@@ -54,6 +54,7 @@ def generate_launch_description():
             'enable_detection': LaunchConfiguration('enable_detection'),
             'enable_pointcloud': LaunchConfiguration('enable_pointcloud'),
             'trigger_auto_start': LaunchConfiguration('trigger_auto_start'),
+            'use_background': LaunchConfiguration('use_background'),
         }.items()
     )
 
@@ -136,6 +137,11 @@ def generate_launch_description():
             'trigger_auto_start',
             default_value='true',
             description='Automatically start video triggering on launch',
+        ),
+        DeclareLaunchArgument(
+            'use_background',
+            default_value='false',
+            description='Include background points (clamped to max_range_m) in the semantic point cloud',
         ),
         DeclareLaunchArgument(
             'enable_ximea',
