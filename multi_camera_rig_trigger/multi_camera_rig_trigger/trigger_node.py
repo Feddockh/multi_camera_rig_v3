@@ -65,9 +65,9 @@ class TriggerNode(Node):
         
         self.declare_parameter(
             'frame_rate_hz',
-            10,
+            5,
             ParameterDescriptor(
-                description='Trigger frame rate in Hz (1-20)',
+                description='Trigger frame rate in Hz (1-5)',
                 type=ParameterType.PARAMETER_INTEGER
             )
         )
@@ -303,12 +303,12 @@ class TriggerNode(Node):
                     result.reason = f"Flash duration {param.value} out of range (0-300 ms)"
             
             elif param.name == 'frame_rate_hz':
-                if 1 <= param.value <= 20:
+                if 1 <= param.value <= 5:
                     self.frame_rate = param.value
                     self.get_logger().info(f"Frame rate parameter updated to {param.value} Hz")
                 else:
                     result.successful = False
-                    result.reason = f"Frame rate {param.value} out of range (1-20 Hz)"
+                    result.reason = f"Frame rate {param.value} out of range (1-5 Hz)"
         
         return result
     

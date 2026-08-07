@@ -23,8 +23,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'frame_rate_hz',
-            default_value='10',
-            description='Trigger frame rate in Hz (1-20)'
+            default_value='5',
+            description='Trigger frame rate in Hz (1-5)'
         ),
         DeclareLaunchArgument(
             'auto_connect',

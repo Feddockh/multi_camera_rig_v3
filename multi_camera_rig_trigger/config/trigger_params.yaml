@@ -8,7 +8,7 @@ trigger_node:
     
     # Trigger settings
     flash_duration_ms: 100    # Flash duration in milliseconds (0-300)
-    frame_rate_hz: 10       # Trigger frame rate in Hz (1-20)
+    frame_rate_hz: 5         # Trigger frame rate in Hz (1-5)
     
     # Startup behavior
     auto_connect: true        # Test connection on startup

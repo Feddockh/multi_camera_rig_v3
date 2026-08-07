@@ -135,7 +135,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'trigger_auto_start',
-            default_value='true',
+            default_value='false',
             description='Automatically start video triggering on launch',
         ),
         DeclareLaunchArgument(

@@ -259,17 +259,17 @@ class TriggerHardwareInterface:
     
     def set_frame_rate(self, rate_hz: int) -> Tuple[bool, str]:
         """
-        Set trigger frame rate in Hz (1–20).
+        Set trigger frame rate in Hz (1–5).
         Matches the exact working behavior confirmed via test script.
-        
+
         Args:
-            rate_hz: Frame rate in Hz (1-20)
-            
+            rate_hz: Frame rate in Hz (1-5)
+
         Returns:
             Tuple of (success, message)
         """
-        if not 1 <= rate_hz <= 20:
-            return False, f"Frame rate {rate_hz} out of range (1–20 Hz)"
+        if not 1 <= rate_hz <= 5:
+            return False, f"Frame rate {rate_hz} out of range (1–5 Hz)"
         
         if not self.open_connection():
             return False, "Failed to open connection"
