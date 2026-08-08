@@ -55,6 +55,7 @@ def generate_launch_description():
             'enable_pointcloud': LaunchConfiguration('enable_pointcloud'),
             'trigger_auto_start': LaunchConfiguration('trigger_auto_start'),
             'use_background': LaunchConfiguration('use_background'),
+            'max_range_m': LaunchConfiguration('max_range_m'),
         }.items()
     )
 
@@ -142,6 +143,11 @@ def generate_launch_description():
             'use_background',
             default_value='false',
             description='Include background points (clamped to max_range_m) in the semantic point cloud',
+        ),
+        DeclareLaunchArgument(
+            'max_range_m',
+            default_value='3.0',
+            description='Maximum distance in meters for points included in the semantic point cloud',
         ),
         DeclareLaunchArgument(
             'enable_ximea',

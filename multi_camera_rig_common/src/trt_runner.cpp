@@ -79,6 +79,12 @@ void TrtLogger::log(Severity severity, const char *msg) noexcept
 // TrtRunner implementation
 TrtRunner::TrtRunner(const std::string &engine_path, bool verbose)
 {
+    // Must be set before the CUDA context is created (i.e. before any other
+    // CUDA/TensorRT call below) so that cudaStreamSynchronize() blocks the
+    // calling thread while the GPU works instead of spin-polling it, which
+    // otherwise pins a full CPU core for the duration of every inference call.
+    checkCuda(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync), "cudaSetDeviceFlags");
+
     logger_ = std::make_unique<TrtLogger>();
 
     auto blob = readFile(engine_path);

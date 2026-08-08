@@ -4,7 +4,7 @@
     flash_duration:
       min: 0
       max: 300
-      default: 170
+      default: 139
       node: "/trigger_node"
       param:
         - "flash_duration_ms"
@@ -14,7 +14,7 @@
     frame_rate:
       min: 1
       max: 5
-      default: 4
+      default: 1
       node: "/trigger_node"
       param:
         - "frame_rate_hz"

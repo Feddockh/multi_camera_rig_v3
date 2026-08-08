@@ -207,7 +207,7 @@ def launch_setup(context, *args, **kwargs):
                 'baseline': 0.06,
                 # Point cloud generation
                 'stride': 1,
-                'max_range_m': 5.0,
+                'max_range_m': float(LaunchConfiguration('max_range_m').perform(context)),
                 'use_background': LaunchConfiguration('use_background').perform(context).lower() == 'true',
                 'left_col_crop': 40,
                 # Input topics
@@ -360,6 +360,11 @@ def generate_launch_description():
             'use_background',
             default_value='true',
             description='Include background points (clamped to max_range_m) in the point cloud'
+        ),
+        DeclareLaunchArgument(
+            'max_range_m',
+            default_value='5.0',
+            description='Maximum distance in meters for points included in the semantic point cloud'
         ),
 
         # ============================
