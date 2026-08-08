@@ -146,7 +146,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'max_range_m',
-            default_value='3.0',
+            default_value='1.5',
             description='Maximum distance in meters for points included in the semantic point cloud',
         ),
         DeclareLaunchArgument(
